@@ -111,11 +111,11 @@ impl FilesystemProvider {
             .unwrap_or_else(|_| Utc::now());
 
         // Read file content (limit to 128KB for context budget)
-        let content = std::fs::read_to_string(path).ok().and_then(|s| {
+        let content = std::fs::read_to_string(path).ok().map(|s| {
             if s.len() > 128_000 {
-                Some(s[..128_000].to_string())
+                s[..128_000].to_string()
             } else {
-                Some(s)
+                s
             }
         });
 
@@ -216,7 +216,7 @@ impl ContextProvider for FilesystemProvider {
         };
 
         self.scan_directory(&self.root, &extensions, &mut objects, max, 0, 3)?;
-        objects.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        objects.sort_by_key(|b| std::cmp::Reverse(b.updated_at));
         objects.truncate(max);
 
         let providers = vec![ProviderId::new("filesystem")];

@@ -67,8 +67,7 @@ impl ContextProvider for DatetimeProvider {
     }
 
     async fn query(&self, _query: &ContextQuery) -> Result<ContextBundle, CppError> {
-        let mut objects = Vec::new();
-        objects.push(self.get_time_context());
+        let objects = vec![self.get_time_context()];
 
         let providers = vec![ProviderId::new("datetime")];
         Ok(ContextBundle {

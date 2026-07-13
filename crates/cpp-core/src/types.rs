@@ -534,11 +534,12 @@ impl From<&str> for Goal {
 /// | `Authoritative` | Provider IS the system of record | GitHub repo metadata |
 /// | `Derived` | Computed from authoritative data | AI summary of a document |
 /// | `Estimated` | Prediction, inference, heuristic | "You might want this PR" |
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum Certainty {
     /// Source of truth. The provider IS the system of record.
+    #[default]
     Authoritative,
     /// Computed or derived from authoritative data (summaries, aggregations).
     Derived,
@@ -569,11 +570,7 @@ impl Ord for Certainty {
     }
 }
 
-impl Default for Certainty {
-    fn default() -> Self {
-        Self::Authoritative
-    }
-}
+
 
 impl fmt::Display for Certainty {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

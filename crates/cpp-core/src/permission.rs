@@ -20,7 +20,7 @@ use crate::types::{ContextType, ProviderId};
 ///
 /// Access levels form an ordered hierarchy:
 /// `MetadataOnly < Summarize < Read < Sensitive < Admin`
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum AccessLevel {
@@ -29,6 +29,7 @@ pub enum AccessLevel {
     /// Summarized or redacted content.
     Summarize,
     /// Full content access — the standard level.
+    #[default]
     Read,
     /// Includes sensitive fields (PII, credentials). Requires explicit grant.
     Sensitive,
@@ -68,9 +69,7 @@ impl Ord for AccessLevel {
     }
 }
 
-impl Default for AccessLevel {
-    fn default() -> Self { Self::Read }
-}
+
 
 impl std::fmt::Display for AccessLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -145,7 +144,7 @@ impl ContextCapability {
     }
 
     pub fn matches_provider(&self, provider_id: &ProviderId) -> bool {
-        self.provider.as_ref().is_none_or(|p| p == provider_id)
+        self.provider.as_ref().map_or(true, |p| p == provider_id)
     }
 
     pub fn matches_context_type(&self, ct: &ContextType) -> bool {
