@@ -6,7 +6,7 @@
 //! # Usage
 //!
 //! ```bash
-//! cargo run --bin simple-query [optional_path_to_scan]
+//! cargo run --bin simple-query [optional_path_to_scan] [optional_goal]
 //! ```
 
 use std::sync::Arc;
@@ -22,7 +22,7 @@ use cpp_sdk::CppClient;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== CPP Semantic Context Resolution Demo ===");
 
-    // Parse target directory from command line arguments, defaulting to "."
+    // Parse target directory and goal from command line arguments
     let args: Vec<String> = std::env::args().collect();
     let target_dir = if args.len() > 1 {
         args[1].clone()
@@ -30,32 +30,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ".".to_string()
     };
 
+    let goal_str = if args.len() > 2 {
+        args[2].clone()
+    } else {
+        "goal.code".to_string()
+    };
+
     let target_path = std::path::PathBuf::from(&target_dir).canonicalize()
         .unwrap_or_else(|_| std::path::PathBuf::from(&target_dir));
 
     println!("Target Directory: {}", target_path.display());
+    println!("Requested Goal:   {}", goal_str);
 
     // 1. Initialize Registry and Cache (Orchestration Layer)
     let registry = ProviderRegistry::new();
     let cache = ContextCache::new();
 
     // 2. Register Providers (Systems of Record)
-    // Filesystem provider serving target workspace
     let fs_provider = Arc::new(FilesystemProvider::new(&target_path));
     registry.register(fs_provider);
 
-    // Git provider serving target workspace repository
     let git_provider = Arc::new(GitProvider::new(&target_path));
     registry.register(git_provider);
 
-    // Datetime provider serving current temporal context
     let dt_provider = Arc::new(DatetimeProvider::new());
     registry.register(dt_provider);
-
-    println!("\nRegistered providers:");
-    for manifest in registry.manifests() {
-        println!(" - {} (Capabilities: {} goals, {} types)", manifest.name, manifest.capabilities.goals.len(), manifest.capabilities.context_types.len());
-    }
 
     // 3. Build the Resolver
     let resolver = ContextResolver::new(registry, cache);
@@ -64,21 +63,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = CppClient::new();
     println!("\nAgent session initialized: {}", client.session_id());
 
-    // 5. Construct a Context Request Query (CRQ)
-    // "I need coding context relevant to current state, including code files and git status"
-    let query = client
-        .query(Goal::code())
-        .scope_current()
-        .include(cpp_core::types::ContextType::file())
-        .include(cpp_core::types::ContextType::repository())
-        .include(cpp_core::types::ContextType::branch())
-        .max_results(5)
-        .build();
+    // 5. Construct a Context Request Query (CRQ) based on requested goal
+    let goal = Goal::new(goal_str);
+    let mut query_builder = client.query(goal.clone()).scope_current();
+
+    // Filter type inclusions based on the requested goal
+    if goal == Goal::code() {
+        query_builder = query_builder
+            .include(cpp_core::types::ContextType::file())
+            .include(cpp_core::types::ContextType::repository())
+            .include(cpp_core::types::ContextType::branch());
+    } else if goal == Goal::calendar() {
+        query_builder = query_builder
+            .include(cpp_core::types::ContextType::temporal());
+    } else if goal == Goal::document() {
+        query_builder = query_builder
+            .include(cpp_core::types::ContextType::file());
+    }
+
+    let query = query_builder.max_results(5).build();
 
     println!("\nSending Context Request Query (CRQ):");
     println!(" - Goal: {}", query.goal);
     println!(" - Depth: {}", query.depth);
-    println!(" - Include types: {}", query.include.iter().map(|t| t.short_name()).collect::<Vec<_>>().join(", "));
+    if !query.include.is_empty() {
+        println!(" - Include types: {}", query.include.iter().map(|t| t.short_name()).collect::<Vec<_>>().join(", "));
+    }
 
     // 6. Resolve the query
     let bundle = resolver.resolve_query(&query).await?;
@@ -100,6 +110,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         if let Some(lang) = obj.get_metadata("language") {
             println!(" - Language: {}", lang);
+        }
+        if let Some(tz) = obj.get_metadata("timezone") {
+            println!(" - Timezone: {}", tz);
+        }
+        if let Some(utc) = obj.get_metadata("utcTime") {
+            println!(" - UTC Time: {}", utc);
         }
     }
 
