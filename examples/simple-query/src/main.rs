@@ -2,6 +2,12 @@
 //!
 //! This example shows how to set up the reference runtime, register providers,
 //! construct a Context Request Query (CRQ), and resolve it to a ranked Context Bundle.
+//!
+//! # Usage
+//!
+//! ```bash
+//! cargo run --bin simple-query [optional_path_to_scan]
+//! ```
 
 use std::sync::Arc;
 
@@ -16,24 +22,37 @@ use cpp_sdk::CppClient;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== CPP Semantic Context Resolution Demo ===");
 
+    // Parse target directory from command line arguments, defaulting to "."
+    let args: Vec<String> = std::env::args().collect();
+    let target_dir = if args.len() > 1 {
+        args[1].clone()
+    } else {
+        ".".to_string()
+    };
+
+    let target_path = std::path::PathBuf::from(&target_dir).canonicalize()
+        .unwrap_or_else(|_| std::path::PathBuf::from(&target_dir));
+
+    println!("Target Directory: {}", target_path.display());
+
     // 1. Initialize Registry and Cache (Orchestration Layer)
     let registry = ProviderRegistry::new();
     let cache = ContextCache::new();
 
     // 2. Register Providers (Systems of Record)
-    // Filesystem provider serving current workspace
-    let fs_provider = Arc::new(FilesystemProvider::new("."));
+    // Filesystem provider serving target workspace
+    let fs_provider = Arc::new(FilesystemProvider::new(&target_path));
     registry.register(fs_provider);
 
-    // Git provider serving current workspace repository
-    let git_provider = Arc::new(GitProvider::new("."));
+    // Git provider serving target workspace repository
+    let git_provider = Arc::new(GitProvider::new(&target_path));
     registry.register(git_provider);
 
     // Datetime provider serving current temporal context
     let dt_provider = Arc::new(DatetimeProvider::new());
     registry.register(dt_provider);
 
-    println!("Registered providers:");
+    println!("\nRegistered providers:");
     for manifest in registry.manifests() {
         println!(" - {} (Capabilities: {} goals, {} types)", manifest.name, manifest.capabilities.goals.len(), manifest.capabilities.context_types.len());
     }
