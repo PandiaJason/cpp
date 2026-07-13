@@ -1,0 +1,88 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/cpp-core",
+    "crates/cpp-protocol",
+    "crates/cpp-runtime",
+    "crates/cpp-sdk",
+    "crates/cpp-transport-stdio",
+    "crates/cpp-transport-http",
+    "crates/cpp-server",
+    "providers/filesystem",
+    "providers/git",
+    "providers/datetime",
+    "examples/simple-query",
+    "examples/streaming",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/pandiajason/cpp"
+description = "Context Provider Protocol — the semantic context layer for AI"
+
+[workspace.dependencies]
+# Internal crates
+cpp-core = { path = "crates/cpp-core" }
+cpp-protocol = { path = "crates/cpp-protocol" }
+cpp-runtime = { path = "crates/cpp-runtime" }
+cpp-sdk = { path = "crates/cpp-sdk" }
+cpp-transport-stdio = { path = "crates/cpp-transport-stdio" }
+cpp-transport-http = { path = "crates/cpp-transport-http" }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+futures = "0.3"
+async-trait = "0.1"
+
+# Utilities
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+url = { version = "2", features = ["serde"] }
+bytes = "1"
+
+# Data structures
+dashmap = "6"
+petgraph = "0.7"
+indexmap = { version = "2", features = ["serde"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Logging / tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# HTTP / networking
+axum = { version = "0.8", features = ["ws"] }
+hyper = { version = "1" }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tokio-tungstenite = "0.26"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Crypto / auth
+hmac = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.9"
+
+# Testing
+tempfile = "3"
+assert_matches = "1.5"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

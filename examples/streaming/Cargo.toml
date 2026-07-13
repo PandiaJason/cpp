@@ -1,0 +1,17 @@
+[package]
+name = "cpp-example-streaming"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Streaming example for CPP"
+
+[[bin]]
+name = "streaming"
+path = "src/main.rs"
+
+[dependencies]
+cpp-core = { workspace = true }
+cpp-sdk = { workspace = true }
+cpp-runtime = { workspace = true }
+

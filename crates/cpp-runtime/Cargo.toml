@@ -1,0 +1,24 @@
+[package]
+name = "cpp-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Reference orchestration runtime for the Context Provider Protocol"
+
+[dependencies]
+cpp-core = { workspace = true }
+cpp-protocol = { workspace = true }
+cpp-sdk = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+futures = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+dashmap = { workspace = true }
+petgraph = { workspace = true }
+indexmap = { workspace = true }

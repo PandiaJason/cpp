@@ -1,0 +1,21 @@
+[package]
+name = "cpp-example-simple-query"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Simple context resolution query example for CPP"
+
+[[bin]]
+name = "simple-query"
+path = "src/main.rs"
+
+[dependencies]
+cpp-core = { workspace = true }
+cpp-sdk = { workspace = true }
+cpp-runtime = { workspace = true }
+cpp-provider-filesystem = { path = "../../providers/filesystem" }
+cpp-provider-git = { path = "../../providers/git" }
+cpp-provider-datetime = { path = "../../providers/datetime" }
+serde_json = { workspace = true }
+tokio = { workspace = true }
