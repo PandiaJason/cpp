@@ -51,7 +51,8 @@ Developers can start building and testing CPP connectors today.
 To start exploring:
 1. **Launch the Daemon & Dashboard**: Run `cargo run --bin cpp-server` and navigate to `http://localhost:3030` to visual the live context relationship graph.
 2. **Run a Context Query**: Execute `cargo run --bin simple-query` to test local directory resolution and Git status checking.
-3. **Explore the Specifications**: Read [RFC-0000: Philosophy](file:///Users/admin/Jas%20Apps/Context%20Provider%20Protocol/spec/RFC-0000-Philosophy.md) and [RFC-0001: Spec](file:///Users/admin/Jas%20Apps/Context%20Provider%20Protocol/spec/RFC-0001-CPP.md) in the specification folder.
+3. **Run the Budget Benchmark**: Execute `cargo run --bin benchmark` to run a local context size optimization run.
+4. **Explore the Specifications**: Read [RFC-0000: Philosophy](file:///Users/admin/Jas%20Apps/Context%20Provider%20Protocol/spec/RFC-0000-Philosophy.md) and [RFC-0001: Spec](file:///Users/admin/Jas%20Apps/Context%20Provider%20Protocol/spec/RFC-0001-CPP.md) in the specification folder.
 
 ---
 

@@ -217,6 +217,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "cpp-example-benchmark"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "cpp-core",
+ "cpp-provider-datetime",
+ "cpp-provider-filesystem",
+ "cpp-provider-git",
+ "cpp-runtime",
+ "cpp-sdk",
+ "tokio",
+]
+
+[[package]]
 name = "cpp-example-simple-query"
 version = "0.1.0"
 dependencies = [
