@@ -26,6 +26,16 @@ To help developers start exploring, we have shared pre-built binaries and exampl
 
 ---
 
+## Why CPP is Genuinely Better Than Existing Approaches
+
+Traditional AI systems gather context by "prompt stuffing" (dumping files into prompts) or running semantic searches over a vector database (RAG). CPP is fundamentally better for three reasons:
+
+* **Budget Enforcement at the Source**: RAG searches and direct file loads have no concept of context limits. If a folder contains 100MB of code, a direct tool will overload your model's context window. CPP negotiates a strict `ContextBudget` (in bytes or objects) before sending data, dynamically ranking and downsampling files at the provider level to guarantee a low token count.
+* **Relational Context Graphs**: Traditional tools return flat, isolated lists of data. CPP builds a directed, weighted semantic graph. It maps relationships between objects (e.g. `Branch` -> `references` -> `Commit` -> `modifies` -> `File` -> `fails` -> `Compiler Error`), allowing the AI to understand the structural context of the codebase in a single structured schema.
+* **Passive Event Streams vs. Active Polling**: To stay up-to-date with your workspace, traditional systems must poll command execution (e.g. running `git status` every 5 seconds). CPP uses WebSockets to stream real-time push events (`cpp/event`). The agent stays idle, waking up only when a file is saved or a build fails.
+
+---
+
 ## The Paradigm Shift: Perception vs. Action
 
 While tools allow AI to act, they do not help them perceive. CPP completes the agent loop by formalizing the **Perceive → Reason → Act** cycle. Instead of relying on active polling, agents subscribe to the CPP bus and receive live context updates passively as they happen in the environment.
