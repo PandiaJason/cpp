@@ -1,49 +1,50 @@
-# Context Provider Protocol (CPP)
+# Introducing the Context Provider Protocol (CPP)
 
-The Context Provider Protocol (CPP) is an open standard for AI applications to negotiate, perceive, and route dynamic, situated context.
+**13 July 2026**
 
-## What is CPP?
-CPP provides a standardized way for AI assistants like Claude, GPT, or Antigravity to:
-* Connect to dynamic context providers and environment monitors
-* Access situated, budget-negotiated, and ranked context
-* Share state asynchronously across collaborative multi-agent networks
-* Maintain strict token, bytes, and lifecycle controls
+*An open-source standard for AI systems to perceive, route, and negotiate situated context in real time.*
 
----
+Today, we are open-sourcing the **Context Provider Protocol (CPP)**, a new standard for connecting AI assistants and collaborative agents to the dynamic environments where they operate. Its aim is to serve as the unified **perception layer** for AI, helping frontier models receive better, more situated, and token-efficient context.
 
-## How CPP works
+As AI assistants gain mainstream adoption, the industry has achieved rapid advances in reasoning (via LLMs) and action (via tool-calling protocols like MCP). Yet even the most sophisticated models remain constrained by their lack of environmental perception—relying on brute-force prompt stuffing, static RAG databases, and ad-hoc shell commands to understand their workspace. Every new context source requires its own custom implementation, making context window management and token budgeting difficult to scale.
 
-### Local vs remote servers
-| Type | Description | Use Case |
-| :--- | :--- | :--- |
-| **Local CPP** | Runs on your device | Local directory scanning, git status, system timezone |
-| **Remote CPP** | Hosted on the internet | Shared context buses, collaborative team agents |
-
-### Key components
-* **Semantic Context Objects (SCOs)**: Ephemeral, typed, and permissioned envelopes carrying situated context (URI, type, content, relations).
-* **Goal Registry**: Intent-based query targets (`goal.code`, `goal.project`, `goal.calendar`) that automate context routing.
-* **Context Bus (Events)**: Streaming publish/subscribe channels delivering real-time environment notifications.
+CPP addresses this challenge. It provides a universal, open standard for connecting AI systems with dynamic context sources, replacing fragmented integrations with a single, event-first protocol. The result is a simpler, more reliable way to give AI systems access to the exact context they need, right when they need it.
 
 ---
 
-## Security & Metadata Model
+## What is the Context Provider Protocol?
 
-### User control
-* Capability-based permission tokens scope access levels (`read`, `write`, `admin`).
-* Time-limited tokens with automatic expiration (TTLs) and lifecycle tracking (`created`, `updated`, `deleted`).
+The Context Provider Protocol is an open standard that enables developers to build secure, two-way connections between dynamic context sources (providers) and AI-powered tools (clients). The architecture is straightforward: developers can either expose their workspace data through CPP servers or build AI applications (CPP clients) that connect to these servers.
 
-### Context hints
-All CPP objects must declare:
-* **Freshness**: Defines cache state (`live`, `recent`, `cached`, `immutable`) to prevent stale context injections.
-* **Certainty**: Defines the truth level of the source (`authoritative`, `derived`, `estimated`).
-This helps agents understand how reliable and current the information is.
+Today, we are introducing three major components of the Context Provider Protocol for developers:
+
+1. **The CPP Specification and SDKs**: Open, transport-agnostic standards supporting JSON-RPC 2.0 wire messages, capability negotiation, and context budgeting.
+2. **Local CPP Daemon & Dashboard (`cpp-server`)**: A reference orchestrator runtime that hosts query resolution, serves an interactive graphical console, and broadcasts live environment events.
+3. **Reference Providers**: Built-in providers for Filesystem scanning, Git repository history tracking, and Datetime timezone reporting.
+
+To help developers start exploring, we have shared pre-built binaries and examples showing how to query workspace metadata, filter objects by certainty and recency, and stream updates over WebSockets.
 
 ---
 
-## Building with CPP
-The CPP documentation (located in the [spec](file:///Users/admin/Jas%20Apps/Context%20Provider%20Protocol/spec) folder) is the source of truth for building CPP servers.
+## The Paradigm Shift: Perception vs. Action
 
-### For developers
-* Open specification in [RFC-0001-CPP.md](file:///Users/admin/Jas%20Apps/Context%20Provider%20Protocol/spec/RFC-0001-CPP.md).
-* Rust SDK (`cpp-sdk`) and reference orchestrator runtime (`cpp-runtime`) available.
-* Reference local filesystem, git, and datetime providers built-in.
+While tools allow AI to act, they do not help them perceive. CPP completes the agent loop by formalizing the **Perceive → Reason → Act** cycle. Instead of relying on active polling, agents subscribe to the CPP bus and receive live context updates passively as they happen in the environment.
+
+Rather than maintaining separate, bespoke connectors for each dataset, developers can now build against a standard protocol. As the ecosystem matures, AI systems will maintain precise context as they transition between different tools and codebases, replacing today's fragmented integrations with a more sustainable, budget-compliant architecture.
+
+---
+
+## Getting Started
+
+Developers can start building and testing CPP connectors today.
+
+To start exploring:
+1. **Launch the Daemon & Dashboard**: Run `cargo run --bin cpp-server` and navigate to `http://localhost:3030` to visual the live context relationship graph.
+2. **Run a Context Query**: Execute `cargo run --bin simple-query` to test local directory resolution and Git status checking.
+3. **Explore the Specifications**: Read [RFC-0000: Philosophy](file:///Users/admin/Jas%20Apps/Context%20Provider%20Protocol/spec/RFC-0000-Philosophy.md) and [RFC-0001: Spec](file:///Users/admin/Jas%20Apps/Context%20Provider%20Protocol/spec/RFC-0001-CPP.md) in the specification folder.
+
+---
+
+## An Open Community
+
+CPP was created to resolve the context assembly fragmentation facing modern AI agents. We are committed to building CPP as a collaborative, open-source project and ecosystem. Whether you are an AI tool developer, an enterprise looking to leverage existing workspace metadata, or an early adopter exploring the agentic frontier, we invite you to build the future of context-aware AI together.
