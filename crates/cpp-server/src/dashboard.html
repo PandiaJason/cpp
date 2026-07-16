@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CPP Live Context Dashboard</title>
+  <!-- Google Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-dark: #07080d;
+      --bg-surface: rgba(20, 22, 33, 0.65);
+      --bg-surface-opaque: #141621;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --primary-glow: linear-gradient(135deg, #7c3aed, #2563eb);
+      --accent-color: #a78bfa;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --color-emerald: #10b981;
+      --color-blue: #3b82f6;
+      --color-amber: #f59e0b;
+      --color-rose: #f43f5e;
+      --font-outfit: 'Outfit', sans-serif;
+      --font-inter: 'Inter', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(124, 58, 237, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(37, 99, 235, 0.1) 0px, transparent 50%);
+      color: var(--text-main);
+      font-family: var(--font-inter);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    header {
+      backdrop-filter: blur(12px);
+      background: rgba(13, 14, 21, 0.5);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .header-logo svg {
+      width: 32px;
+      height: 32px;
+      fill: none;
+      stroke: url(#primaryGrad);
+      stroke-width: 2;
+    }
+
+    .header-logo h1 {
+      font-family: var(--font-outfit);
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .header-logo h1 span {
+      background: var(--primary-glow);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .status-badge {
+      align-items: center;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 9999px;
+      color: var(--color-emerald);
+      display: flex;
+      font-size: 0.8rem;
+      font-weight: 600;
+      gap: 0.5rem;
+      padding: 0.35rem 0.85rem;
+    }
+
+    .status-dot {
+      background-color: var(--color-emerald);
+      border-radius: 50%;
+      height: 8px;
+      width: 8px;
+      box-shadow: 0 0 8px var(--color-emerald);
+    }
+
+    .status-dot.offline {
+      background-color: var(--color-rose);
+      box-shadow: 0 0 8px var(--color-rose);
+    }
+
+    .status-badge.offline {
+      background: rgba(244, 63, 94, 0.1);
+      border: 1px solid rgba(244, 63, 94, 0.2);
+      color: var(--color-rose);
+    }
+
+    .dashboard-layout {
+      display: grid;
+      grid-template-columns: 320px 1fr 340px;
+      gap: 1.5rem;
+      padding: 1.5rem;
+      height: calc(100vh - 66px);
+      max-width: 1800px;
+      margin: 0 auto;
+    }
+
+    /* Sidebar controls */
+    .sidebar-controls {
+      background: var(--bg-surface);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      overflow-y: auto;
+    }
+
+    .panel-title {
+      font-family: var(--font-outfit);
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      border-left: 3px solid var(--accent-color);
+      padding-left: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    label {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    input, select {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.9rem;
+      padding: 0.75rem;
+      transition: all 0.2s ease;
+      width: 100%;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--accent-color);
+      box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
+    }
+
+    .budget-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    button.btn-primary {
+      background: var(--primary-glow);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      cursor: pointer;
+      font-family: var(--font-outfit);
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 0.85rem;
+      transition: all 0.3s ease;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    button.btn-primary:hover {
+      opacity: 0.95;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+    }
+
+    /* Central Content Area */
+    .central-content {
+      display: grid;
+      grid-template-rows: auto 1fr 280px;
+      gap: 1.5rem;
+      overflow: hidden;
+    }
+
+    .overview-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+
+    .stat-card {
+      background: var(--bg-surface);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .stat-val {
+      font-family: var(--font-outfit);
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .stat-label {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    /* Grid of SCO Cards */
+    .sco-grid-wrapper {
+      overflow-y: auto;
+      padding-right: 0.25rem;
+    }
+
+    .sco-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+
+    .sco-card {
+      background: var(--bg-surface);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .sco-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: transparent;
+    }
+
+    /* Certainty glowing headers */
+    .sco-card.cert-authoritative::before { background: var(--color-emerald); }
+    .sco-card.cert-derived::before { background: var(--color-blue); }
+    .sco-card.cert-estimated::before { background: var(--color-amber); }
+
+    .sco-card.cert-authoritative:hover {
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.08);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    .sco-card.cert-derived:hover {
+      box-shadow: 0 8px 24px rgba(59, 130, 246, 0.08);
+      border-color: rgba(59, 130, 246, 0.3);
+    }
+    .sco-card.cert-estimated:hover {
+      box-shadow: 0 8px 24px rgba(245, 158, 11, 0.08);
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+
+    .sco-card:hover {
+      transform: translateY(-2px);
+    }
+
+    .sco-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .sco-title {
+      font-family: var(--font-outfit);
+      font-size: 1rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 170px;
+    }
+
+    .sco-type-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      color: var(--text-muted);
+    }
+
+    .sco-summary {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      min-height: 2.2rem;
+    }
+
+    .sco-meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: auto;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      padding-top: 0.75rem;
+    }
+
+    .meta-tag {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .meta-tag.green { color: var(--color-emerald); background: rgba(16, 185, 129, 0.05); }
+    .meta-tag.blue { color: var(--color-blue); background: rgba(59, 130, 246, 0.05); }
+    .meta-tag.amber { color: var(--color-amber); background: rgba(245, 158, 11, 0.05); }
+
+    /* Graph Canvas Panel */
+    .graph-panel {
+      background: var(--bg-surface);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .graph-canvas-container {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #graphCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .graph-legend {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      display: flex;
+      gap: 0.75rem;
+      background: rgba(13, 14, 21, 0.8);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.7rem;
+      pointer-events: none;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: var(--text-muted);
+    }
+
+    .legend-color {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    /* Right Sidebar - Event Feed */
+    .sidebar-events {
+      background: var(--bg-surface);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      overflow-y: hidden;
+    }
+
+    .event-feed {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      padding-right: 0.25rem;
+    }
+
+    .event-item {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 0.75rem;
+      font-size: 0.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      position: relative;
+      animation: slideIn 0.3s ease-out;
+      border-left: 2px solid var(--accent-color);
+    }
+
+    .event-item.kind-created { border-left-color: var(--color-emerald); }
+    .event-item.kind-updated { border-left-color: var(--color-blue); }
+    .event-item.kind-deleted { border-left-color: var(--color-rose); }
+
+    .event-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .event-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+      background: rgba(167, 139, 250, 0.1);
+      color: var(--accent-color);
+    }
+
+    .event-badge.created { background: rgba(16, 185, 129, 0.1); color: var(--color-emerald); }
+    .event-badge.updated { background: rgba(59, 130, 246, 0.1); color: var(--color-blue); }
+    .event-badge.deleted { background: rgba(244, 63, 94, 0.1); color: var(--color-rose); }
+
+    .event-time {
+      color: var(--text-muted);
+      font-size: 0.65rem;
+    }
+
+    .event-title {
+      font-family: var(--font-outfit);
+      font-weight: 600;
+    }
+
+    .event-desc {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      line-height: 1.3;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateX(30px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.1);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-muted);
+      gap: 1rem;
+      font-family: var(--font-outfit);
+      padding: 2rem;
+      text-align: center;
+    }
+
+    .empty-state svg {
+      width: 48px;
+      height: 48px;
+      stroke: var(--text-muted);
+      opacity: 0.5;
+    }
+  </style>
+</head>
+<body>
+  
+  <svg style="position: absolute; width: 0; height: 0;">
+    <defs>
+      <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#7c3aed" />
+        <stop offset="100%" stop-color="#2563eb" />
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <header>
+    <div class="header-logo">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h1>Context Provider Protocol <span>(CPP)</span></h1>
+    </div>
+    <div class="status-badge" id="wsStatusBadge">
+      <div class="status-dot" id="wsStatusDot"></div>
+      <span id="wsStatusText">Connecting...</span>
+    </div>
+  </header>
+
+  <main class="dashboard-layout">
+    <!-- Left Sidebar: Controls -->
+    <section class="sidebar-controls">
+      <h2 class="panel-title">Query Console</h2>
+      
+      <div class="form-group">
+        <label for="targetDir">Target Workspace Path</label>
+        <input type="text" id="targetDir" value="." placeholder="/absolute/path/to/project">
+      </div>
+
+      <div class="form-group">
+        <label for="goalSelect">Intended Goal</label>
+        <select id="goalSelect">
+          <option value="goal.code" selected>goal.code (Development/Code)</option>
+          <option value="goal.calendar">goal.calendar (Time/Timezone)</option>
+          <option value="goal.project">goal.project (Metadata/Tasks)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="maxResults">Max SCOs</label>
+        <input type="number" id="maxResults" value="10" min="1" max="50">
+      </div>
+
+      <h2 class="panel-title" style="margin-top: 1rem;">Context Budget</h2>
+      
+      <div class="budget-grid">
+        <div class="form-group">
+          <label for="maxBytes">Max Bytes</label>
+          <select id="maxBytes">
+            <option value="16000">16 KB</option>
+            <option value="64000" selected>64 KB</option>
+            <option value="128000">128 KB</option>
+            <option value="unlimited">Unlimited</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="budgetPreference">Preference</label>
+          <select id="budgetPreference">
+            <option value="quality" selected>Quality</option>
+            <option value="speed">Speed</option>
+            <option value="density">Density</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="btnResolve" onclick="resolveContext()">
+        <svg style="width:18px;height:18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        Resolve Context
+      </button>
+    </section>
+
+    <!-- Central Content Area -->
+    <section class="central-content">
+      <!-- Top Row Stats -->
+      <div class="overview-stats">
+        <div class="stat-card">
+          <div class="stat-val" id="statCount">0</div>
+          <div class="stat-label">Active SCOs</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="statLatency">0 ms</div>
+          <div class="stat-label">Resolution Latency</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="statSession">ses_none</div>
+          <div class="stat-label">Binding Session ID</div>
+        </div>
+      </div>
+
+      <!-- Middle Grid of Cards -->
+      <div class="sco-grid-wrapper">
+        <div class="sco-grid" id="scoGrid">
+          <div class="empty-state" style="grid-column: 1 / -1;">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+            </svg>
+            <p>Click "Resolve Context" to query the environment.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Graph Visualizer -->
+      <div class="graph-panel">
+        <h3 class="panel-title" style="margin-bottom: 0.5rem;">Semantic Context Graph</h3>
+        <div class="graph-canvas-container">
+          <canvas id="graphCanvas"></canvas>
+        </div>
+        <div class="graph-legend">
+          <div class="legend-item"><div class="legend-color" style="background:var(--color-emerald)"></div><span>File</span></div>
+          <div class="legend-item"><div class="legend-color" style="background:var(--color-blue)"></div><span>Git</span></div>
+          <div class="legend-item"><div class="legend-color" style="background:var(--color-amber)"></div><span>Time</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Sidebar: Event Feed -->
+    <section class="sidebar-events">
+      <h2 class="panel-title">Context Event Bus</h2>
+      <div class="event-feed" id="eventFeed">
+        <!-- Events populated via WebSocket -->
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Global UI State
+    let activeSCOs = [];
+    let ws = null;
+    let canvas = document.getElementById('graphCanvas');
+    let ctx = canvas.getContext('2d');
+    let graphNodes = [];
+    let graphEdges = [];
+    let animationId = null;
+
+    // Resize canvas
+    function resizeCanvas() {
+      const container = canvas.parentElement;
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+      drawGraph();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // Initialize WebSocket connection
+    function initWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/api/events`;
+      
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        document.getElementById('wsStatusDot').classList.remove('offline');
+        document.getElementById('wsStatusBadge').classList.remove('offline');
+        document.getElementById('wsStatusText').innerText = 'Connected';
+        addLocalEvent("System", "WebSocket Connection Established", "Listening to real-time events published on CPP bus.");
+      };
+
+      ws.onclose = () => {
+        document.getElementById('wsStatusDot').classList.add('offline');
+        document.getElementById('wsStatusBadge').classList.add('offline');
+        document.getElementById('wsStatusText').innerText = 'Offline';
+        addLocalEvent("System", "WebSocket Connection Terminated", "Trying to reconnect in 3s...", "deleted");
+        setTimeout(initWebSocket, 3000);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.method === "cpp/event") {
+            const params = data.params;
+            handleIncomingEvent(params);
+          }
+        } catch (e) {
+          console.error("Failed to parse WebSocket event:", e);
+        }
+      };
+    }
+
+    function addLocalEvent(provider, title, desc, kind = "created") {
+      const feed = document.getElementById('eventFeed');
+      const item = document.createElement('div');
+      item.className = `event-item kind-${kind}`;
+      
+      const timeStr = new Date().toLocaleTimeString();
+      item.innerHTML = `
+        <div class="event-header">
+          <span class="event-badge ${kind}">${provider}</span>
+          <span class="event-time">${timeStr}</span>
+        </div>
+        <div class="event-title">${title}</div>
+        <div class="event-desc">${desc}</div>
+      `;
+      feed.insertBefore(item, feed.firstChild);
+    }
+
+    function handleIncomingEvent(eventParams) {
+      let event = eventParams;
+      if (eventParams.event) {
+        event = eventParams.event;
+      }
+      const provider = event.providerId || "unknown";
+      const kind = event.kind || "updated";
+      
+      // Access values from event
+      let title = event.contextUri || "Context object";
+      let desc = `Event kind: ${kind}`;
+      
+      if (event.snapshot) {
+        title = event.snapshot.title || title;
+        desc = event.snapshot.summary || desc;
+      }
+      
+      addLocalEvent(provider, title, desc, kind);
+      
+      // If we already have context resolved, push/update the objects list
+      if (activeSCOs.length > 0 && event.snapshot) {
+        const index = activeSCOs.findIndex(o => o.uri === event.snapshot.uri);
+        if (index !== -1) {
+          if (kind === "deleted" || kind === "expired") {
+            activeSCOs.splice(index, 1);
+          } else {
+            activeSCOs[index] = event.snapshot;
+          }
+        } else if (kind === "created" || kind === "updated") {
+          activeSCOs.unshift(event.snapshot);
+        }
+        updateDashboardView();
+      }
+    }
+
+    // Resolve Context API Call (JSON-RPC POST)
+    async function resolveContext() {
+      const targetDir = document.getElementById('targetDir').value;
+      const goal = document.getElementById('goalSelect').value;
+      const maxResults = parseInt(document.getElementById('maxResults').value);
+      
+      const bytesStr = document.getElementById('maxBytes').value;
+      const budgetBytes = bytesStr === 'unlimited' ? null : parseInt(bytesStr);
+      const budgetPref = document.getElementById('budgetPreference').value;
+
+      const rpcPayload = {
+        jsonrpc: "2.0",
+        id: Date.now(),
+        method: "cpp/query",
+        params: {
+          query: {
+            goal: goal,
+            scope: "current",
+            maxResults: maxResults,
+            depth: 1, // Query with relationship traversal
+            budget: budgetBytes ? {
+              maxBytes: budgetBytes,
+              maxObjects: maxResults,
+              prefer: budgetPref
+            } : null,
+            hints: {
+              workspacePath: targetDir
+            }
+          }
+        }
+      };
+
+      try {
+        const response = await fetch('/api/rpc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(rpcPayload)
+        });
+
+        const rpcResult = await response.json();
+        
+        if (rpcResult.error) {
+          alert(`CPP Query Error: ${rpcResult.error.message}`);
+          return;
+        }
+
+        const bundle = rpcResult.result;
+        activeSCOs = bundle.objects || [];
+        
+        // Update stats
+        document.getElementById('statCount').innerText = activeSCOs.length;
+        document.getElementById('statLatency').innerText = `${bundle.resolutionTimeMs} ms`;
+        document.getElementById('statSession').innerText = bundle.metadata?.sessionId || "ses_active";
+
+        updateDashboardView();
+        
+      } catch (err) {
+        console.error("HTTP RPC resolution failed:", err);
+        alert("Failed to contact CPP Server API endpoint.");
+      }
+    }
+
+    function updateDashboardView() {
+      const grid = document.getElementById('scoGrid');
+      grid.innerHTML = '';
+
+      if (activeSCOs.length === 0) {
+        grid.innerHTML = `
+          <div class="empty-state" style="grid-column: 1 / -1;">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0a2 2 0 01-2 2H6a2 2 0 01-2-2m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5"/>
+            </svg>
+            <p>No Context Objects Resolved for current budget.</p>
+          </div>
+        `;
+        buildGraphData();
+        return;
+      }
+
+      activeSCOs.forEach(sco => {
+        const certaintyClass = `cert-${sco.certainty || 'authoritative'}`;
+        const card = document.createElement('div');
+        card.className = `sco-card ${certaintyClass}`;
+        
+        let metaHtml = `
+          <span class="meta-tag ${getCertaintyColor(sco.certainty)}">${sco.certainty}</span>
+          <span class="meta-tag blue">${sco.freshness?.kind || 'live'}</span>
+        `;
+
+        if (sco.metadata?.language) {
+          metaHtml += `<span class="meta-tag">${sco.metadata.language}</span>`;
+        }
+        if (sco.metadata?.timezone) {
+          metaHtml += `<span class="meta-tag">${sco.metadata.timezone}</span>`;
+        }
+
+        card.innerHTML = `
+          <div class="sco-header">
+            <span class="sco-title" title="${sco.title}">${sco.title}</span>
+            <span class="sco-type-badge">${sco.contextType?.split('.').pop() || 'SCO'}</span>
+          </div>
+          <div class="sco-summary">${sco.summary || 'No summary description provided.'}</div>
+          <div class="sco-meta-row">${metaHtml}</div>
+        `;
+        
+        grid.appendChild(card);
+      });
+
+      buildGraphData();
+    }
+
+    function getCertaintyColor(certainty) {
+      if (certainty === 'authoritative') return 'green';
+      if (certainty === 'derived') return 'blue';
+      return 'amber';
+    }
+
+    // Build Graph Node and Edges arrays
+    function buildGraphData() {
+      graphNodes = [];
+      graphEdges = [];
+
+      if (activeSCOs.length === 0) {
+        drawGraph();
+        return;
+      }
+
+      // Add a central node representing the request Workspace/Session
+      const centralId = "session_root";
+      graphNodes.push({
+        id: centralId,
+        label: "Workspace Context",
+        type: "session",
+        x: canvas.width / 2,
+        y: canvas.height / 2,
+        r: 15,
+        color: "rgba(167, 139, 250, 0.95)"
+      });
+
+      // Construct nodes for each SCO
+      const angleStep = (2 * Math.PI) / activeSCOs.length;
+      activeSCOs.forEach((sco, index) => {
+        const angle = index * angleStep;
+        const radius = Math.min(canvas.width, canvas.height) * 0.3;
+        
+        let color = "var(--color-emerald)"; // default File
+        let type = "file";
+        if (sco.contextType.includes(".branch") || sco.contextType.includes(".repository")) {
+          color = "var(--color-blue)";
+          type = "git";
+        } else if (sco.contextType.includes(".temporal")) {
+          color = "var(--color-amber)";
+          type = "datetime";
+        }
+
+        graphNodes.push({
+          id: sco.uri,
+          label: sco.title,
+          type: type,
+          x: canvas.width / 2 + Math.cos(angle) * radius,
+          y: canvas.height / 2 + Math.sin(angle) * radius,
+          r: 10,
+          color: color
+        });
+
+        // Add edge linking it to the workspace root
+        graphEdges.push({
+          source: centralId,
+          target: sco.uri,
+          label: "includes"
+        });
+
+        // Add internal relations (if present)
+        if (sco.relations) {
+          sco.relations.forEach(rel => {
+            const targetUri = rel.target_uri || rel.targetUri;
+            if (targetUri) {
+              graphEdges.push({
+                source: sco.uri,
+                target: targetUri,
+                label: rel.relation_type || "references"
+              });
+            }
+          });
+        }
+      });
+
+      // Run force-directed layout frames
+      runLayout();
+    }
+
+    // A lightweight physics simulation layout for the nodes
+    function runLayout() {
+      if (animationId) cancelAnimationFrame(animationId);
+      
+      let iterations = 100;
+      function step() {
+        if (iterations <= 0) return;
+        iterations--;
+
+        const k = 0.05; // Spring force
+        const rep = 400; // Repulsive force coefficient
+
+        // 1. Repulsive forces between all nodes
+        for (let i = 0; i < graphNodes.length; i++) {
+          let n1 = graphNodes[i];
+          for (let j = i + 1; j < graphNodes.length; j++) {
+            let n2 = graphNodes[j];
+            let dx = n2.x - n1.x;
+            let dy = n2.y - n1.y;
+            let d = Math.sqrt(dx * dx + dy * dy) || 1;
+            
+            if (d < 150) {
+              let f = rep / (d * d);
+              let fx = (dx / d) * f;
+              let fy = (dy / d) * f;
+              
+              if (n1.id !== "session_root") {
+                n1.x -= fx;
+                n1.y -= fy;
+              }
+              if (n2.id !== "session_root") {
+                n2.x += fx;
+                n2.y += fy;
+              }
+            }
+          }
+        }
+
+        // 2. Spring forces along edges
+        graphEdges.forEach(edge => {
+          let n1 = graphNodes.find(n => n.id === edge.source);
+          let n2 = graphNodes.find(n => n.id === edge.target);
+          if (!n1 || !n2) return;
+
+          let dx = n2.x - n1.x;
+          let dy = n2.y - n1.y;
+          let d = Math.sqrt(dx * dx + dy * dy) || 1;
+          
+          let rest = 80;
+          let f = k * (d - rest);
+          let fx = (dx / d) * f;
+          let fy = (dy / d) * f;
+
+          if (n1.id !== "session_root") {
+            n1.x += fx;
+            n1.y += fy;
+          }
+          if (n2.id !== "session_root") {
+            n2.x -= fx;
+            n2.y -= fy;
+          }
+        });
+
+        // 3. Keep within canvas boundaries
+        graphNodes.forEach(node => {
+          node.x = Math.max(20, Math.min(canvas.width - 20, node.x));
+          node.y = Math.max(20, Math.min(canvas.height - 20, node.y));
+        });
+
+        drawGraph();
+        animationId = requestAnimationFrame(step);
+      }
+
+      step();
+    }
+
+    function drawGraph() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw edges
+      graphEdges.forEach(edge => {
+        let n1 = graphNodes.find(n => n.id === edge.source);
+        let n2 = graphNodes.find(n => n.id === edge.target);
+        if (!n1 || !n2) return;
+
+        ctx.beginPath();
+        ctx.moveTo(n1.x, n1.y);
+        ctx.lineTo(n2.x, n2.y);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Draw edge label in middle
+        if (edge.label !== "includes") {
+          ctx.font = "8px 'JetBrains Mono'";
+          ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+          ctx.textAlign = "center";
+          ctx.fillText(edge.label, (n1.x + n2.x)/2, (n1.y + n2.y)/2 - 4);
+        }
+      });
+
+      // Draw nodes
+      graphNodes.forEach(node => {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.r, 0, 2 * Math.PI);
+        ctx.fillStyle = node.color;
+        ctx.shadowColor = node.color;
+        ctx.shadowBlur = 6;
+        ctx.fill();
+        ctx.shadowBlur = 0; // reset
+
+        // Label
+        ctx.font = "9px 'Outfit'";
+        ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+        ctx.textAlign = "center";
+        ctx.fillText(node.label, node.x, node.y + node.r + 12);
+      });
+    }
+
+    // App Initialization
+    window.onload = () => {
+      resizeCanvas();
+      initWebSocket();
+      resolveContext(); // Query default directory initially
+    };
+  </script>
+</body>
+</html>

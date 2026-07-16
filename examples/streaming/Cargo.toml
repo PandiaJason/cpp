@@ -14,4 +14,7 @@ path = "src/main.rs"
 cpp-core = { workspace = true }
 cpp-sdk = { workspace = true }
 cpp-runtime = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }
+
 
