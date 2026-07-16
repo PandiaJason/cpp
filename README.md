@@ -54,7 +54,33 @@ To start exploring:
 3. **Run the Budget Benchmark**: Execute `cargo run --bin benchmark` to run a local context size optimization run.
 4. **Explore the Specifications**: Read [RFC-0000: Philosophy](file:///Users/admin/Jas%20Apps/Context%20Provider%20Protocol/spec/RFC-0000-Philosophy.md) and [RFC-0001: Spec](file:///Users/admin/Jas%20Apps/Context%20Provider%20Protocol/spec/RFC-0001-CPP.md) in the specification folder.
 
+### Running the Local Benchmark
+
+The workspace includes a programmatic benchmark utility to demonstrate source-level context optimization in real time. It queries any target folder (defaulting to the current workspace) with and without a strict `ContextBudget` (capping response to `250 bytes` and `5 objects` for document queries).
+
+To run the benchmark on this workspace:
+```bash
+cargo run --bin benchmark
+```
+
+To run the benchmark on any other folder (e.g. a directory containing your own text files or a git repository):
+```bash
+cargo run --bin benchmark -- "/path/to/target/folder"
+```
+
+The output displays a comparison table showing object counts, total content size, resolution speeds, and the percentage savings:
+```text
+-----------------------------------------------------
+| Metric             | Unbudgeted       | Budgeted        |
+-----------------------------------------------------
+| File Count         | 48               | 4               |
+| Total Content Size | 222,287 bytes    | 1,998 bytes     |
+-----------------------------------------------------
+>>> Combined context volume reduced by 98.95% at source!
+```
+
 ---
+
 
 ## An Open Community
 
