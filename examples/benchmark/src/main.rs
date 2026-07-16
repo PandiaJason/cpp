@@ -36,72 +36,129 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = CppClient::new();
 
     // ==========================================
-    // TEST 1: Unbudgeted query (Request all workspace files)
+    // BENCHMARK 1: Filesystem Provider (Code Files)
     // ==========================================
-    let query_unbudgeted = client.query(Goal::code())
+    println!("--- Filesystem Context Benchmark ---");
+    let query_fs_unbudgeted = client.query(Goal::code())
         .scope_current()
         .include(ContextType::file())
         .max_results(50)
         .build();
 
-    let start_unbudgeted = Instant::now();
-    let bundle_unbudgeted = resolver.resolve_query(&query_unbudgeted).await?;
-    let duration_unbudgeted = start_unbudgeted.elapsed();
+    let start_fs_unbudgeted = Instant::now();
+    let bundle_fs_unbudgeted = resolver.resolve_query(&query_fs_unbudgeted).await?;
+    let duration_fs_unbudgeted = start_fs_unbudgeted.elapsed();
 
-    // Calculate content size of unbudgeted files
-    let mut size_unbudgeted = 0;
-    for obj in &bundle_unbudgeted.objects {
+    let mut size_fs_unbudgeted = 0;
+    for obj in &bundle_fs_unbudgeted.objects {
         if let Some(content) = obj.get_metadata("sizeBytes") {
             if let Some(bytes) = content.as_u64() {
-                size_unbudgeted += bytes;
+                size_fs_unbudgeted += bytes;
             }
         }
     }
 
-    // ==========================================
-    // TEST 2: Budgeted query (Request files with a strict 2KB limit)
-    // ==========================================
-    let budget = ContextBudget {
+    let budget_fs = ContextBudget {
         max_bytes: Some(2000),
         max_objects: Some(5),
         max_latency_ms: None,
         prefer: BudgetPreference::Quality,
     };
 
-    let query_budgeted = client.query(Goal::code())
+    let query_fs_budgeted = client.query(Goal::code())
         .scope_current()
         .include(ContextType::file())
         .max_results(50)
-        .budget(budget)
+        .budget(budget_fs)
         .build();
 
-    let start_budgeted = Instant::now();
-    let bundle_budgeted = resolver.resolve_query(&query_budgeted).await?;
-    let duration_budgeted = start_budgeted.elapsed();
+    let start_fs_budgeted = Instant::now();
+    let bundle_fs_budgeted = resolver.resolve_query(&query_fs_budgeted).await?;
+    let duration_fs_budgeted = start_fs_budgeted.elapsed();
 
-    let mut size_budgeted = 0;
-    for obj in &bundle_budgeted.objects {
+    let mut size_fs_budgeted = 0;
+    for obj in &bundle_fs_budgeted.objects {
         if let Some(content) = obj.get_metadata("sizeBytes") {
             if let Some(bytes) = content.as_u64() {
-                size_budgeted += bytes;
+                size_fs_budgeted += bytes;
             }
         }
     }
 
-    // ==========================================
-    // DISPLAY RESULTS
-    // ==========================================
     println!("-----------------------------------------------------");
     println!("| Metric             | Unbudgeted       | Budgeted        |");
     println!("-----------------------------------------------------");
-    println!("| Object Count       | {:<16} | {:<15} |", bundle_unbudgeted.objects.len(), bundle_budgeted.objects.len());
-    println!("| Total Content Size | {:<11} bytes | {:<10} bytes |", size_unbudgeted, size_budgeted);
-    println!("| Resolution Time    | {:<13?} | {:<15?} |", duration_unbudgeted, duration_budgeted);
+    println!("| File Count         | {:<16} | {:<15} |", bundle_fs_unbudgeted.objects.len(), bundle_fs_budgeted.objects.len());
+    println!("| Total Content Size | {:<11} bytes | {:<10} bytes |", size_fs_unbudgeted, size_fs_budgeted);
+    println!("| Resolution Time    | {:<13?} | {:<15?} |", duration_fs_unbudgeted, duration_fs_budgeted);
     println!("-----------------------------------------------------");
 
-    if size_unbudgeted > 0 {
-        let savings = (1.0 - (size_budgeted as f64 / size_unbudgeted as f64)) * 100.0;
-        println!("\n>>> Token/Bytes volume reduced by {:.2}% at source!", savings);
+    // ==========================================
+    // BENCHMARK 2: Git Provider (Commits & History)
+    // ==========================================
+    println!("\n--- Git History Context Benchmark ---");
+    let query_git_unbudgeted = client.query(Goal::project())
+        .scope_current()
+        .include(ContextType::commit())
+        .max_results(50)
+        .build();
+
+    let start_git_unbudgeted = Instant::now();
+    let bundle_git_unbudgeted = resolver.resolve_query(&query_git_unbudgeted).await?;
+    let duration_git_unbudgeted = start_git_unbudgeted.elapsed();
+
+    // Calculate raw size of commit descriptions/summaries
+    let mut size_git_unbudgeted = 0;
+    for obj in &bundle_git_unbudgeted.objects {
+        size_git_unbudgeted += obj.title.len() as u64;
+        if let Some(ref summary) = obj.summary {
+            size_git_unbudgeted += summary.len() as u64;
+        }
+    }
+
+    let budget_git = ContextBudget {
+        max_bytes: Some(300), // Very strict budget for commit summaries
+        max_objects: Some(3),
+        max_latency_ms: None,
+        prefer: BudgetPreference::Quality,
+    };
+
+    let query_git_budgeted = client.query(Goal::project())
+        .scope_current()
+        .include(ContextType::commit())
+        .max_results(50)
+        .budget(budget_git)
+        .build();
+
+    let start_git_budgeted = Instant::now();
+    let bundle_git_budgeted = resolver.resolve_query(&query_git_budgeted).await?;
+    let duration_git_budgeted = start_git_budgeted.elapsed();
+
+    let mut size_git_budgeted = 0;
+    for obj in &bundle_git_budgeted.objects {
+        size_git_budgeted += obj.title.len() as u64;
+        if let Some(ref summary) = obj.summary {
+            size_git_budgeted += summary.len() as u64;
+        }
+    }
+
+    println!("-----------------------------------------------------");
+    println!("| Metric             | Unbudgeted       | Budgeted        |");
+    println!("-----------------------------------------------------");
+    println!("| Commit Count       | {:<16} | {:<15} |", bundle_git_unbudgeted.objects.len(), bundle_git_budgeted.objects.len());
+    println!("| Metadata Text Size | {:<11} bytes | {:<10} bytes |", size_git_unbudgeted, size_git_budgeted);
+    println!("| Resolution Time    | {:<13?} | {:<15?} |", duration_git_unbudgeted, duration_git_budgeted);
+    println!("-----------------------------------------------------");
+
+    // ==========================================
+    // SUMMARY ANALYSIS
+    // ==========================================
+    let total_unbudgeted = size_fs_unbudgeted + size_git_unbudgeted;
+    let total_budgeted = size_fs_budgeted + size_git_budgeted;
+
+    if total_unbudgeted > 0 {
+        let savings = (1.0 - (total_budgeted as f64 / total_unbudgeted as f64)) * 100.0;
+        println!("\n>>> Combined context volume reduced by {:.2}% at source!", savings);
         println!(">>> Prompt cost for LLM is {:.2}% cheaper!", savings);
     }
 
