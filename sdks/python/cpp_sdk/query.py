@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 from pydantic.alias_generators import to_camel
 
 from .types import (
@@ -74,7 +74,11 @@ class ContextQuery(BaseModel):
 
     model_config = _CAMEL_CONFIG
 
-    goal: Goal
+    goal: Goal | str
+
+    @field_serializer("goal")
+    def serialize_goal(self, goal: Goal | str) -> str:
+        return str(goal)
     scope: QueryScope = Field(default_factory=QueryScope)
     include: list[str] = Field(default_factory=list)
     exclude: list[str] = Field(default_factory=list)

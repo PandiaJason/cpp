@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, NewType
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 
 # ---------------------------------------------------------------------------
@@ -191,21 +191,33 @@ class Goal(BaseModel):
     intent: str
     description: str = ""
 
+    def __str__(self) -> str:
+        if self.intent.startswith("goal."):
+            return self.intent
+        return f"goal.{self.intent}"
+
+    @property
+    def value(self) -> str:
+        return str(self)
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> Any:
+        return str(self)
+
     @classmethod
     def code(cls) -> Goal:
-        return cls(intent="code", description="Code investigation and editing")
+        return cls(intent="goal.code", description="Code investigation and editing")
 
     @classmethod
     def project(cls) -> Goal:
-        return cls(intent="project", description="Project and repository metadata")
+        return cls(intent="goal.project", description="Project and repository metadata")
 
     @classmethod
     def document(cls) -> Goal:
-        return cls(intent="document", description="Documentation and text files")
+        return cls(intent="goal.document", description="Documentation and text files")
 
     @classmethod
     def calendar(cls) -> Goal:
-        return cls(intent="calendar", description="Temporal and scheduling context")
+        return cls(intent="goal.calendar", description="Temporal and scheduling context")
 
 
 class Freshness(BaseModel):
@@ -237,6 +249,13 @@ class Importance(BaseModel):
 
     priority: float = Field(default=0.5, ge=0.0, le=1.0)
 
+    @model_validator(mode="before")
+    @classmethod
+    def validate_importance(cls, data: Any) -> Any:
+        if isinstance(data, (int, float)):
+            return {"priority": float(data)}
+        return data
+
     @classmethod
     def high(cls) -> Importance:
         return cls(priority=0.9)
@@ -265,9 +284,20 @@ class Reference(BaseModel):
 
     model_config = _CAMEL_CONFIG
 
-    url: str
+    url: str = ""
+    uri: str | None = None
     label: str | None = None
     ref_type: str = "source"
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_reference(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("url") and data.get("uri"):
+                data["url"] = data["uri"]
+            if "type" in data and "ref_type" not in data and "refType" not in data:
+                data["ref_type"] = data["type"]
+        return data
 
     @classmethod
     def source(cls, url: str, label: str | None = None) -> Reference:

@@ -29,11 +29,9 @@ from cpp_sdk.protocol import JsonRpcError, JsonRpcRequest, JsonRpcResponse
 
 def test_goal_serialization():
     goal = Goal.code()
-    data = goal.model_dump(by_alias=True)
-    assert "intent" in data
-    assert "description" in data
-    assert data["intent"] == "code"
-    assert data["description"] == "Code investigation and editing"
+    assert str(goal) == "goal.code"
+    assert goal.intent == "goal.code"
+    assert goal.description == "Code investigation and editing"
 
 
 def test_context_type_factories():
@@ -244,7 +242,7 @@ def test_query_builder():
         .build()
     )
     assert isinstance(query, ContextQuery)
-    assert query.goal.intent == "code"
+    assert str(query.goal) == "goal.code"
     assert query.budget is not None
     assert query.budget.max_bytes == 2048
     assert query.budget.prefer == BudgetPreference.SPEED

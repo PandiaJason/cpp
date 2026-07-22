@@ -197,8 +197,9 @@ class CppClient:
             CPP_QUERY,
             params.model_dump(by_alias=True, exclude_none=True),
         )
-        result = QueryResult.model_validate(raw)
-        return result.bundle
+        if isinstance(raw, dict) and "bundle" in raw:
+            return ContextBundle.model_validate(raw["bundle"])
+        return ContextBundle.model_validate(raw)
 
     # ------------------------------------------------------------------
     # Resolve

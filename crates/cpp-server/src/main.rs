@@ -85,10 +85,66 @@ struct QueryParamsWrapper {
 async fn handle_rpc(
     Json(payload): Json<JsonRpcRequest>,
 ) -> impl IntoResponse {
-    // 1. Validate method name
-    if payload.method != "cpp/query" {
-        let err = JsonRpcError::new(-32601, "Method not found", None);
-        return Json(JsonRpcResponse::error(payload.id, err)).into_response();
+    match payload.method.as_str() {
+        "cpp/initialize" => {
+            let res = serde_json::json!({
+                "protocolVersion": "0.1.0",
+                "runtimeInfo": {
+                    "name": "cpp-server-axum",
+                    "version": "0.1.0"
+                },
+                "capabilities": {
+                    "streaming": true,
+                    "subscriptions": true,
+                    "budgetNegotiation": true
+                },
+                "providers": [
+                    { "id": "filesystem", "name": "Filesystem Context Provider", "contextTypes": ["application/cpp.document.file"], "goals": ["code", "document"] },
+                    { "id": "git", "name": "Git Context Provider", "contextTypes": ["application/cpp.repository", "application/cpp.commit", "application/cpp.branch"], "goals": ["code", "project"] },
+                    { "id": "datetime", "name": "Datetime Context Provider", "contextTypes": ["application/cpp.datetime"], "goals": ["calendar"] }
+                ]
+            });
+            return Json(JsonRpcResponse::success(payload.id, res)).into_response();
+        }
+        "cpp/capabilities" => {
+            let res = serde_json::json!({
+                "providers": [
+                    { "id": "filesystem", "name": "Filesystem Context Provider", "contextTypes": ["application/cpp.document.file"], "goals": ["code", "document"] },
+                    { "id": "git", "name": "Git Context Provider", "contextTypes": ["application/cpp.repository", "application/cpp.commit", "application/cpp.branch"], "goals": ["code", "project"] },
+                    { "id": "datetime", "name": "Datetime Context Provider", "contextTypes": ["application/cpp.datetime"], "goals": ["calendar"] }
+                ]
+            });
+            return Json(JsonRpcResponse::success(payload.id, res)).into_response();
+        }
+        "cpp/resolve" => {
+            let params_val = match payload.params {
+                Some(v) => v,
+                None => {
+                    let err = JsonRpcError::new(-32602, "Missing params", None);
+                    return Json(JsonRpcResponse::error(payload.id, err)).into_response();
+                }
+            };
+            let uri_str = params_val.get("uri").and_then(|u| u.as_str()).unwrap_or("");
+            let res = serde_json::json!({
+                "object": {
+                    "uri": uri_str,
+                    "id": uuid::Uuid::new_v4().to_string(),
+                    "contextType": "application/cpp.document.file",
+                    "providerId": "filesystem",
+                    "title": uri_str,
+                    "certainty": "authoritative",
+                    "freshness": { "kind": "live" },
+                    "importance": { "priority": 0.8 },
+                    "content": format!("Resolved content for {}", uri_str)
+                }
+            });
+            return Json(JsonRpcResponse::success(payload.id, res)).into_response();
+        }
+        "cpp/query" => {}
+        _ => {
+            let err = JsonRpcError::new(-32601, "Method not found", None);
+            return Json(JsonRpcResponse::error(payload.id, err)).into_response();
+        }
     }
 
     // 2. Validate params are present
