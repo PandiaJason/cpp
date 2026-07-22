@@ -1,89 +1,202 @@
-# Introducing the Context Provider Protocol (CPP)
+# Context Provider Protocol (CPP)
 
-**13 July 2026**
+**The perception layer for AI agents.**
 
-*An open-source standard for AI systems to perceive, route, and negotiate situated context in real time.*
+[![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange)](https://www.rust-lang.org/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Protocol](https://img.shields.io/badge/Protocol-v0.1.0-purple)]()
 
-Today, we are open-sourcing the **Context Provider Protocol (CPP)**, a new standard for connecting AI assistants and collaborative agents to the dynamic environments where they operate. Its aim is to serve as the unified **perception layer** for AI, helping frontier models receive better, more situated, and token-efficient context.
+CPP is an open standard that gives AI assistants **structured, budget-aware, real-time perception** of your workspace. It replaces prompt stuffing, static RAG, and ad-hoc shell commands with a single protocol that connects any context source to any AI tool.
 
-As AI assistants gain mainstream adoption, the industry has achieved rapid advances in reasoning (via LLMs) and action (via tool-calling protocols like MCP). Yet even the most sophisticated models remain constrained by their lack of environmental perception—relying on brute-force prompt stuffing, static RAG databases, and ad-hoc shell commands to understand their workspace. Every new context source requires its own custom implementation, making context window management and token budgeting difficult to scale.
-
-CPP addresses this challenge. It provides a universal, open standard for connecting AI systems with dynamic context sources, replacing fragmented integrations with a single, event-first protocol. The result is a simpler, more reliable way to give AI systems access to the exact context they need, right when they need it.
-
----
-
-## What is the Context Provider Protocol?
-
-The Context Provider Protocol is an open standard that enables developers to build secure, two-way connections between dynamic context sources (providers) and AI-powered tools (clients). The architecture is straightforward: developers can either expose their workspace data through CPP servers or build AI applications (CPP clients) that connect to these servers.
-
-Today, we are introducing three major components of the Context Provider Protocol for developers:
-
-1. **The CPP Specification and SDKs**: Open, transport-agnostic standards supporting JSON-RPC 2.0 wire messages, capability negotiation, and context budgeting.
-2. **Local CPP Daemon & Dashboard (`cpp-server`)**: A reference orchestrator runtime that hosts query resolution, serves an interactive graphical console, and broadcasts live environment events.
-3. **Reference Providers**: Built-in providers for Filesystem scanning, Git repository history tracking, and Datetime timezone reporting.
-
-To help developers start exploring, we have shared pre-built binaries and examples showing how to query workspace metadata, filter objects by certainty and recency, and stream updates over WebSockets.
+```
+┌─────────────┐     ┌─────────────────┐     ┌──────────────┐
+│  AI Agent    │────▶│   CPP Server    │◀────│  Providers   │
+│ (Cursor,     │     │  (Perception    │     │ (Git, FS,    │
+│  Copilot,    │ RPC │   Orchestrator) │     │  GitHub,     │
+│  Claude)     │◀────│                 │────▶│  Jira, Slack)│
+└─────────────┘     └─────────────────┘     └──────────────┘
+      ▲                     │
+      │              WebSocket Events
+      │              (real-time push)
+      └─────────────────────┘
+```
 
 ---
 
-## Why CPP is Genuinely Better Than Existing Approaches
+## Table of Contents
 
-Traditional AI systems gather context by "prompt stuffing" (dumping files into prompts) or running semantic searches over a vector database (RAG). CPP is fundamentally better for three reasons:
-
-* **Budget Enforcement at the Source**: RAG searches and direct file loads have no concept of context limits. If a folder contains 100MB of code, a direct tool will overload your model's context window. CPP negotiates a strict `ContextBudget` (in bytes or objects) before sending data, dynamically ranking and downsampling files at the provider level to guarantee a low token count.
-* **Relational Context Graphs**: Traditional tools return flat, isolated lists of data. CPP builds a directed, weighted semantic graph. It maps relationships between objects (e.g. `Branch` -> `references` -> `Commit` -> `modifies` -> `File` -> `fails` -> `Compiler Error`), allowing the AI to understand the structural context of the codebase in a single structured schema.
-* **Passive Event Streams vs. Active Polling**: To stay up-to-date with your workspace, traditional systems must poll command execution (e.g. running `git status` every 5 seconds). CPP uses WebSockets to stream real-time push events (`cpp/event`). The agent stays idle, waking up only when a file is saved or a build fails.
+- [Why CPP?](#why-cpp)
+- [How It Works](#how-it-works)
+- [Project Structure](#project-structure)
+- [Getting Started](#getting-started)
+- [Python SDK](#python-sdk)
+- [MCP-to-CPP Bridge](#mcp-to-cpp-bridge)
+- [SaaS Providers](#saas-context-providers)
+- [Benchmarks](#benchmarks)
+- [Specifications](#specifications)
+- [Contributing](#contributing)
 
 ---
 
-## The Paradigm Shift: Perception vs. Action
+## Why CPP?
 
-While tools allow AI to act, they do not help them perceive. CPP completes the agent loop by formalizing the **Perceive → Reason → Act** cycle. Instead of relying on active polling, agents subscribe to the CPP bus and receive live context updates passively as they happen in the environment.
+AI assistants today are **blind**. They rely on brute-force file dumping, vector searches, or ad-hoc terminal commands to understand your workspace. This leads to:
 
-Rather than maintaining separate, bespoke connectors for each dataset, developers can now build against a standard protocol. As the ecosystem matures, AI systems will maintain precise context as they transition between different tools and codebases, replacing today's fragmented integrations with a more sustainable, budget-compliant architecture.
+| Problem | Without CPP | With CPP |
+| :--- | :--- | :--- |
+| **Token waste** | Dumps 50,000 tokens of irrelevant files | Sends only 500 tokens of relevant context |
+| **No relationships** | Flat list of files, no structure | Graph of nodes + edges (commit → modifies → file) |
+| **Stale context** | Polls `git status` every 5 seconds | WebSocket push events, zero polling |
+| **Per-tool custom code** | Custom integration for each AI tool | One standard API works everywhere |
+| **No budget control** | Overflows context window silently | Negotiates strict byte/object limits |
+
+### CPP vs Existing Approaches
+
+| Feature | Prompt Stuffing | RAG | MCP Tools | **CPP** |
+| :--- | :--- | :--- | :--- | :--- |
+| Budget enforcement | ❌ | ❌ | ❌ | ✅ Server-side |
+| Relationship graph | ❌ | ❌ | ❌ | ✅ Directed edges |
+| Real-time events | ❌ | ❌ | ❌ | ✅ WebSocket push |
+| Cross-tool standard | ❌ | ❌ | ✅ | ✅ |
+| Context ranking | ❌ | Similarity | ❌ | ✅ Importance + recency |
+
+---
+
+## How It Works
+
+CPP does exactly three things:
+
+### 1. Standard API (Plug-and-Play)
+Every context source — filesystem, git, GitHub, Jira, Slack — plugs into one universal JSON-RPC 2.0 API. Any AI tool connects to the same `cpp/query` endpoint.
+
+### 2. Relationship Graph (Connect the Dots)
+CPP builds a directed graph of **Semantic Context Objects (SCOs)** linked by typed edges:
+
+```
+[Repository: cpp] ──contains──▶ [Branch: main]
+                                      │
+                                  references
+                                      ▼
+                               [Commit: c75815e]
+                                      │
+                                   modifies
+                                      ▼
+                               [File: main.rs] ──imports──▶ [File: client.rs]
+```
+
+Relationships are parsed **locally by your CPU** (git logs, import statements) — not guessed by the LLM. 100% accurate, zero tokens.
+
+### 3. Budget Engine (Trim the Fat)
+Before sending context to the AI, CPP negotiates a strict budget:
+
+```python
+budget = ContextBudget(max_bytes=4096, max_objects=10, prefer="quality")
+```
+
+The server ranks objects by importance, drops the irrelevant ones, and guarantees the response fits within the AI's context window.
+
+---
+
+## Project Structure
+
+```
+context-provider-protocol/
+├── spec/                          # Protocol specifications
+│   ├── RFC-0000-Philosophy.md     # Design philosophy
+│   └── RFC-0001-CPP.md            # Wire protocol spec (JSON-RPC 2.0)
+│
+├── crates/                        # Rust core (the engine)
+│   ├── cpp-core/                  # Types, SCO schema, query models, budget logic
+│   ├── cpp-protocol/              # JSON-RPC message definitions
+│   ├── cpp-sdk/                   # ContextProvider trait, CppClient, ProviderAdapter
+│   ├── cpp-runtime/               # ContextResolver, ContextCache orchestration
+│   └── cpp-server/                # Axum HTTP daemon + WebSocket + dashboard
+│
+├── providers/                     # Context source plugins
+│   ├── filesystem/                # Local file scanner (Rust)
+│   ├── git/                       # Git history, branches, commits (Rust)
+│   ├── datetime/                  # System timezone + calendar (Rust)
+│   ├── github/                    # GitHub PRs, issues, commits (Python)
+│   ├── jira/                      # Jira issues, sprints, epics (Python)
+│   └── slack/                     # Slack messages, channels (Python)
+│
+├── sdks/
+│   └── python/                    # Python SDK
+│       ├── cpp_sdk/               # Pydantic models, async client, provider base
+│       │   └── bridges/           # MCP-to-CPP bridge
+│       └── tests/                 # Serialization round-trip tests
+│
+└── examples/
+    ├── simple-query/              # Minimal context query example
+    ├── streaming/                 # WebSocket event streaming example
+    └── benchmark/                 # Budget optimization benchmark
+```
 
 ---
 
 ## Getting Started
 
-Developers can start building and testing CPP connectors today.
+### Prerequisites
 
-To start exploring:
-1. **Launch the Daemon & Dashboard**: Run `cargo run --bin cpp-server` and navigate to `http://localhost:3030` to visual the live context relationship graph.
-2. **Run a Context Query**: Execute `cargo run --bin simple-query` to test local directory resolution and Git status checking.
-3. **Run the Budget Benchmark**: Execute `cargo run --bin benchmark` to run a local context size optimization run.
-4. **Explore the Specifications**: Read [RFC-0000: Philosophy](file:///Users/admin/Jas%20Apps/Context%20Provider%20Protocol/spec/RFC-0000-Philosophy.md) and [RFC-0001: Spec](file:///Users/admin/Jas%20Apps/Context%20Provider%20Protocol/spec/RFC-0001-CPP.md) in the specification folder.
+- **Rust** 1.75+ (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
+- **Python** 3.10+ (for Python SDK and SaaS providers)
 
-### Running the Local Benchmark
+### 1. Launch the Server & Dashboard
 
-The workspace includes a programmatic benchmark utility to demonstrate source-level context optimization in real time. It queries any target folder (defaulting to the current workspace) with and without a strict `ContextBudget` (capping response to `250 bytes` and `5 objects` for document queries).
-
-To run the benchmark on this workspace:
 ```bash
+cargo run --bin cpp-server
+```
+
+Navigate to **http://localhost:3030** to see the live context relationship graph in the glassmorphic dashboard.
+
+### 2. Run a Context Query (Rust)
+
+```bash
+cargo run --bin simple-query
+```
+
+### 3. Run a Context Query (Python)
+
+```bash
+cd sdks/python
+pip install -e .
+```
+
+```python
+import asyncio
+from cpp_sdk import CppClient, Goal
+
+async def main():
+    async with CppClient("http://localhost:3030") as client:
+        bundle = await client.query(Goal.code(), budget_max_bytes=4096)
+        for obj in bundle.objects:
+            print(f"  {obj.title} → {obj.uri}")
+        print(f"\n  {bundle.total_count} objects, {bundle.resolution_time_ms}ms")
+
+asyncio.run(main())
+```
+
+### 4. Run the Budget Benchmark
+
+```bash
+# On this workspace
 cargo run --bin benchmark
+
+# On any folder
+cargo run --bin benchmark -- "/path/to/your/project"
 ```
 
-To run the benchmark on any other folder (e.g. a directory containing your own text files or a git repository):
-```bash
-cargo run --bin benchmark -- "/path/to/target/folder"
-```
+### 5. Explore the Specifications
 
-The output displays a comparison table showing object counts, total content size, resolution speeds, and the percentage savings:
-```text
------------------------------------------------------
-| Metric             | Unbudgeted       | Budgeted        |
------------------------------------------------------
-| File Count         | 48               | 4               |
-| Total Content Size | 222,287 bytes    | 1,998 bytes     |
------------------------------------------------------
->>> Combined context volume reduced by 98.95% at source!
-```
+- [RFC-0000: Philosophy](spec/RFC-0000-Philosophy.md) — Design principles and rationale
+- [RFC-0001: Wire Protocol](spec/RFC-0001-CPP.md) — Full JSON-RPC 2.0 specification
 
 ---
 
 ## Python SDK
 
-The CPP Python SDK provides Pydantic v2 models, an async HTTP/WebSocket client, and abstract provider base classes for building AI-agent context integrations.
+The Python SDK provides a complete client library with Pydantic v2 models that serialize to the exact camelCase JSON format expected by the CPP server.
 
 ### Installation
 
@@ -91,37 +204,48 @@ The CPP Python SDK provides Pydantic v2 models, an async HTTP/WebSocket client, 
 pip install cpp-sdk
 ```
 
-### Quick Start
+### Core Components
+
+| Module | Description |
+| :--- | :--- |
+| `cpp_sdk.types` | Goal, ContextType, ContextBudget, Certainty, Freshness, AccessLevel, etc. |
+| `cpp_sdk.context` | ContextObject (SCO), ContextBundle, ContextObjectBuilder |
+| `cpp_sdk.query` | ContextQuery, ContextQueryBuilder with fluent API |
+| `cpp_sdk.client` | Async CppClient (HTTP + WebSocket) |
+| `cpp_sdk.provider` | Abstract ContextProvider and ProviderAdapter base classes |
+| `cpp_sdk.protocol` | JSON-RPC 2.0 message types and CPP method constants |
+| `cpp_sdk.errors` | Exception hierarchy (CppError, CppConnectionError, etc.) |
+
+### Query with Budget
 
 ```python
-from cpp_sdk import CppClient, Goal
+from cpp_sdk import CppClient, Goal, BudgetPreference
 
 async with CppClient("http://localhost:3030") as client:
-    # Query for code context with a 4KB budget
     bundle = await client.query(
         Goal.code(),
         budget_max_bytes=4096,
+        budget_prefer=BudgetPreference.QUALITY,
         workspace_path="/my/project",
     )
-
-    for obj in bundle.objects:
-        print(f"{obj.title} ({obj.uri})")
-        print(f"  Type: {obj.context_type}")
-        print(f"  Certainty: {obj.certainty}")
+    print(f"Received {bundle.total_count} objects in {bundle.resolution_time_ms}ms")
 ```
 
-### Building a Custom Provider
+### Build a Custom Provider
 
 ```python
-from cpp_sdk import ContextProvider, ProviderManifest, ProviderCapabilities
-from cpp_sdk import ContextType, Goal, ContextBundle, ContextObjectBuilder
+from cpp_sdk import (
+    ContextProvider, ProviderManifest, ProviderCapabilities,
+    ContextType, Goal, ContextBundle, ContextObjectBuilder,
+    Certainty, Freshness,
+)
 
-class MyProvider(ContextProvider):
+class DatabaseProvider(ContextProvider):
     @property
     def manifest(self) -> ProviderManifest:
         return ProviderManifest(
-            id="my-provider",
-            name="My Custom Provider",
+            id="database",
+            name="Database Schema Provider",
             capabilities=ProviderCapabilities.basic(
                 context_types=[ContextType.file()],
                 goals=[Goal.code()],
@@ -129,10 +253,13 @@ class MyProvider(ContextProvider):
         )
 
     async def query(self, query):
+        schema = await self._fetch_schema()
         obj = (
-            ContextObjectBuilder("cpp://my/file/main.py", ContextType.file(), "my-provider")
-            .title("main.py")
-            .content("print('hello world')")
+            ContextObjectBuilder("cpp://db/schema/main", ContextType.file(), "database")
+            .title("Database Schema")
+            .content(schema)
+            .certainty(Certainty.AUTHORITATIVE)
+            .freshness(Freshness.live())
             .build()
         )
         return ContextBundle(objects=[obj], total_count=1)
@@ -141,69 +268,87 @@ class MyProvider(ContextProvider):
         ...
 ```
 
+### Subscribe to Live Events
+
+```python
+async with CppClient("http://localhost:3030") as client:
+    async for event in client.subscribe():
+        print(f"[{event.kind}] {event.uri} from {event.provider_id}")
+```
+
 ---
 
 ## MCP-to-CPP Bridge
 
-Connect any MCP-compatible AI tool (Claude Desktop, Cursor, etc.) to a running CPP server without writing any code.
+Connect Claude Desktop, Cursor, or any MCP client to a running CPP server — zero code required.
 
 ### Setup
 
-1. Start the CPP server: `cargo run --bin cpp-server`
-2. Add the bridge to your Claude Desktop config (`claude_desktop_config.json`):
+1. Start the CPP server:
+   ```bash
+   cargo run --bin cpp-server
+   ```
 
-```json
-{
-  "mcpServers": {
-    "cpp": {
-      "command": "python",
-      "args": ["-m", "cpp_sdk.bridges.mcp_bridge"],
-      "env": {
-        "CPP_SERVER_URL": "http://localhost:3030"
-      }
-    }
-  }
-}
-```
+2. Add to your Claude Desktop config (`claude_desktop_config.json`):
+   ```json
+   {
+     "mcpServers": {
+       "cpp": {
+         "command": "python",
+         "args": ["-m", "cpp_sdk.bridges.mcp_bridge"],
+         "env": {
+           "CPP_SERVER_URL": "http://localhost:3030"
+         }
+       }
+     }
+   }
+   ```
 
-3. Restart Claude Desktop. Three new tools are now available:
-   - **`cpp_query`** — Query workspace context by goal (code/project/document/calendar) with optional byte budget.
-   - **`cpp_resolve`** — Resolve a single SCO by its CPP URI.
-   - **`cpp_capabilities`** — List available providers and their capabilities.
+3. Restart Claude Desktop. Three new tools appear:
+
+| MCP Tool | What It Does |
+| :--- | :--- |
+| `cpp_query` | Query workspace context by goal with optional byte budget |
+| `cpp_resolve` | Resolve a single SCO by its CPP URI |
+| `cpp_capabilities` | List available providers and their capabilities |
 
 ---
 
 ## SaaS Context Providers
 
-CPP ships with ready-made providers for popular SaaS platforms. Each provider translates external API data into standard Semantic Context Objects (SCOs).
+Ready-made providers that translate external SaaS APIs into standard SCOs.
 
 ### GitHub Provider
 
-Surfaces pull requests, issues, and commits as CPP context objects.
+Surfaces pull requests, issues, and commits with relationship edges (PR → modifies → commit).
 
 ```python
 from providers.github.github_provider import GitHubProvider
 
 provider = GitHubProvider(owner="myorg", repo="myrepo")
 await provider.start()
-bundle = await provider.query(query)  # Returns PRs, issues, commits as SCOs
+
+bundle = await provider.query(query)
+# Returns: PRs, issues, commits as SCOs with relations
 ```
 
-Set `GITHUB_TOKEN` environment variable for authentication.
+**Environment**: `GITHUB_TOKEN`
 
 ### Jira Provider
 
-Surfaces Jira issues, sprints, and epics with relationship edges (blocks, is_blocked_by, relates_to).
+Surfaces issues, sprints, and epics with blocking/relating relationship edges.
 
 ```python
 from providers.jira.jira_provider import JiraProvider
 
 provider = JiraProvider(project_key="PROJ")
 await provider.start()
-bundle = await provider.query(query)  # Returns current sprint issues as SCOs
+
+bundle = await provider.query(query)
+# Returns: Current sprint issues with blocks/relates_to edges
 ```
 
-Set `JIRA_BASE_URL`, `JIRA_EMAIL`, and `JIRA_API_TOKEN` environment variables.
+**Environment**: `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`
 
 ### Slack Provider
 
@@ -214,13 +359,79 @@ from providers.slack.slack_provider import SlackProvider
 
 provider = SlackProvider(channels=["C01ABC123"])
 await provider.start()
-bundle = await provider.query(query)  # Returns recent messages as SCOs
+
+bundle = await provider.query(query)
+# Returns: Recent messages ranked by reactions
 ```
 
-Set `SLACK_BOT_TOKEN` environment variable.
+**Environment**: `SLACK_BOT_TOKEN`
 
 ---
 
-## An Open Community
+## Benchmarks
 
-CPP was created to resolve the context assembly fragmentation facing modern AI agents. We are committed to building CPP as a collaborative, open-source project and ecosystem. Whether you are an AI tool developer, an enterprise looking to leverage existing workspace metadata, or an early adopter exploring the agentic frontier, we invite you to build the future of context-aware AI together.
+CPP's budget engine achieves **98%+ context reduction** at the source level:
+
+```text
+-----------------------------------------------------
+| Metric             | Unbudgeted       | Budgeted        |
+-----------------------------------------------------
+| File Count         | 48               | 4               |
+| Total Content Size | 222,287 bytes    | 1,998 bytes     |
+-----------------------------------------------------
+>>> Combined context volume reduced by 98.95% at source!
+```
+
+Run it yourself:
+```bash
+cargo run --bin benchmark -- "/path/to/any/folder"
+```
+
+---
+
+## Specifications
+
+| Document | Description |
+| :--- | :--- |
+| [RFC-0000: Philosophy](spec/RFC-0000-Philosophy.md) | Design principles, the Perceive → Reason → Act cycle, and why CPP exists |
+| [RFC-0001: Wire Protocol](spec/RFC-0001-CPP.md) | Complete JSON-RPC 2.0 specification with all methods, types, and schemas |
+
+### Protocol Methods
+
+| Method | Direction | Purpose |
+| :--- | :--- | :--- |
+| `cpp/initialize` | Client → Server | Handshake, capability negotiation |
+| `cpp/query` | Client → Server | Query context with goal, budget, scope |
+| `cpp/resolve` | Client → Server | Resolve a single SCO by URI |
+| `cpp/capabilities` | Client → Server | List available providers |
+| `cpp/subscribe` | Client → Server | Subscribe to live events |
+| `cpp/event` | Server → Client | Push real-time context changes |
+| `cpp/publish` | Client → Server | Publish a context event |
+| `cpp/shutdown` | Client → Server | Graceful shutdown |
+
+---
+
+## Contributing
+
+CPP is an open-source project built to solve the context fragmentation facing modern AI agents. We welcome contributions across all layers:
+
+- **New Providers** — Connect a new data source (databases, CI/CD, monitoring, etc.)
+- **SDK Ports** — Port the Python SDK to TypeScript, Go, or other languages
+- **Protocol Extensions** — Propose new RFC specifications
+- **Bug Reports** — File issues for any problems you encounter
+
+### Running Tests
+
+```bash
+# Rust tests (52 tests)
+cargo test --workspace
+
+# Python SDK tests (14 tests)
+cd sdks/python && pip install -e ".[dev]" && pytest tests/ -v
+```
+
+---
+
+## License
+
+MIT
