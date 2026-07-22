@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "cpp": {
+      "command": "python",
+      "args": ["-m", "cpp_sdk.bridges.mcp_bridge"],
+      "env": {
+        "CPP_SERVER_URL": "http://localhost:3030"
+      }
+    }
+  }
+}

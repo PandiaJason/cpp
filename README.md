@@ -81,6 +81,145 @@ The output displays a comparison table showing object counts, total content size
 
 ---
 
+## Python SDK
+
+The CPP Python SDK provides Pydantic v2 models, an async HTTP/WebSocket client, and abstract provider base classes for building AI-agent context integrations.
+
+### Installation
+
+```bash
+pip install cpp-sdk
+```
+
+### Quick Start
+
+```python
+from cpp_sdk import CppClient, Goal
+
+async with CppClient("http://localhost:3030") as client:
+    # Query for code context with a 4KB budget
+    bundle = await client.query(
+        Goal.code(),
+        budget_max_bytes=4096,
+        workspace_path="/my/project",
+    )
+
+    for obj in bundle.objects:
+        print(f"{obj.title} ({obj.uri})")
+        print(f"  Type: {obj.context_type}")
+        print(f"  Certainty: {obj.certainty}")
+```
+
+### Building a Custom Provider
+
+```python
+from cpp_sdk import ContextProvider, ProviderManifest, ProviderCapabilities
+from cpp_sdk import ContextType, Goal, ContextBundle, ContextObjectBuilder
+
+class MyProvider(ContextProvider):
+    @property
+    def manifest(self) -> ProviderManifest:
+        return ProviderManifest(
+            id="my-provider",
+            name="My Custom Provider",
+            capabilities=ProviderCapabilities.basic(
+                context_types=[ContextType.file()],
+                goals=[Goal.code()],
+            ),
+        )
+
+    async def query(self, query):
+        obj = (
+            ContextObjectBuilder("cpp://my/file/main.py", ContextType.file(), "my-provider")
+            .title("main.py")
+            .content("print('hello world')")
+            .build()
+        )
+        return ContextBundle(objects=[obj], total_count=1)
+
+    async def resolve(self, uri):
+        ...
+```
+
+---
+
+## MCP-to-CPP Bridge
+
+Connect any MCP-compatible AI tool (Claude Desktop, Cursor, etc.) to a running CPP server without writing any code.
+
+### Setup
+
+1. Start the CPP server: `cargo run --bin cpp-server`
+2. Add the bridge to your Claude Desktop config (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "cpp": {
+      "command": "python",
+      "args": ["-m", "cpp_sdk.bridges.mcp_bridge"],
+      "env": {
+        "CPP_SERVER_URL": "http://localhost:3030"
+      }
+    }
+  }
+}
+```
+
+3. Restart Claude Desktop. Three new tools are now available:
+   - **`cpp_query`** — Query workspace context by goal (code/project/document/calendar) with optional byte budget.
+   - **`cpp_resolve`** — Resolve a single SCO by its CPP URI.
+   - **`cpp_capabilities`** — List available providers and their capabilities.
+
+---
+
+## SaaS Context Providers
+
+CPP ships with ready-made providers for popular SaaS platforms. Each provider translates external API data into standard Semantic Context Objects (SCOs).
+
+### GitHub Provider
+
+Surfaces pull requests, issues, and commits as CPP context objects.
+
+```python
+from providers.github.github_provider import GitHubProvider
+
+provider = GitHubProvider(owner="myorg", repo="myrepo")
+await provider.start()
+bundle = await provider.query(query)  # Returns PRs, issues, commits as SCOs
+```
+
+Set `GITHUB_TOKEN` environment variable for authentication.
+
+### Jira Provider
+
+Surfaces Jira issues, sprints, and epics with relationship edges (blocks, is_blocked_by, relates_to).
+
+```python
+from providers.jira.jira_provider import JiraProvider
+
+provider = JiraProvider(project_key="PROJ")
+await provider.start()
+bundle = await provider.query(query)  # Returns current sprint issues as SCOs
+```
+
+Set `JIRA_BASE_URL`, `JIRA_EMAIL`, and `JIRA_API_TOKEN` environment variables.
+
+### Slack Provider
+
+Surfaces channel messages and threads with reaction-based importance weighting.
+
+```python
+from providers.slack.slack_provider import SlackProvider
+
+provider = SlackProvider(channels=["C01ABC123"])
+await provider.start()
+bundle = await provider.query(query)  # Returns recent messages as SCOs
+```
+
+Set `SLACK_BOT_TOKEN` environment variable.
+
+---
 
 ## An Open Community
 
