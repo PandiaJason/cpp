@@ -1,6 +1,6 @@
 # Context Provider Protocol (CPP)
 
-> **The universal open-standard perception layer for AI systems.**
+> **The open-standard perception layer for AI systems.**
 
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-F74C00.svg?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB.svg?logo=python&logoColor=white)](https://python.org/)
@@ -8,85 +8,119 @@
 [![Protocol](https://img.shields.io/badge/Protocol-v0.1.0-8B5CF6.svg)](spec/RFC-0001-CPP.md)
 [![Tests](https://img.shields.io/badge/Tests-69%20passing-22C55E.svg)]()
 
-CPP is an open protocol standard that provides AI assistants, autonomous agents, and LLM-powered IDEs (Google Antigravity, Claude, ChatGPT, Cursor, LangChain) with **structured, budget-aware, real-time perception** of their operating environment. 
+CPP is an open protocol specification designed for AI assistants, autonomous coding agents, and IDEs (Cursor, Claude Code, GitHub Copilot, OpenAI Codex, Gemini CLI). It provides a **structured, budget-aware, real-time perception layer** that operates upstream of execution tools.
 
-It replaces ad-hoc prompt stuffing, static RAG pipelines, and unstructured shell outputs with a unified, typed context-resolution engine built on JSON-RPC 2.0.
-
----
-
-## 🌐 Vision: Why the AI Industry Needs CPP
-
-Today, AI models suffer from **Context Inflation** and **Unstructured Noise**. Every AI tool (IDE, CLI agent, browser sidecar) invents its own prompt-stuffing mechanisms, reading whole files and terminal streams into the LLM context window.
-
-```
-                  THE AI PERCEPTION GAP
-
-        Without CPP: Unstructured Prompt Stuffing
- ┌──────────────┐     Raw Files / Shell Dumps      ┌───────────────┐
- │  AI Model    │ ◀─────────────────────────────── │ Workspace &   │
- │ (30k Tokens) │ 30,511 tokens ($0.091 / query)   │ Tool Output   │
- └──────────────┘                                  └───────────────┘
-
-          With CPP: Structured Semantic Context Graph
- ┌──────────────┐    Typed SCOs & Budget Solved    ┌───────────────┐
- │  AI Model    │ ◀─────────────────────────────── │  CPP Engine   │
- │ (58 Tokens)  │ 58 tokens ($0.00017 / query)     │ (Git, Slack,  │
- └──────────────┘ 99.81% Reduction at Source       │  Jira, Files) │
-                                                   └───────────────┘
-```
-
-**CPP solves this for the entire AI industry:**
-- **For AI Labs (Google DeepMind, OpenAI, Anthropic):** Provides a standardized, clean context-perception layer so models spend context windows on *reasoning* rather than sifting through raw text.
-- **For Developer Tools (Cursor, Antigravity, VS Code, Windsurf):** Eliminates custom data-fetching shims by exposing a single protocol for codebases, issues, PRs, and communications.
-- **For Enterprise & SaaS (GitHub, Jira, Slack, Notion):** Enables SaaS providers to implement a single `ContextProvider` interface that works natively across all AI assistants.
+CPP complements the **Model Context Protocol (MCP)**: while MCP standardizes how AI systems **act** (tool execution, file edits, mutations), CPP standardizes how AI systems **perceive** (situated context resolution, token-budget enforcement, and relational graphs).
 
 ---
 
-## 📊 Benchmark: Antigravity Agent WITH vs. WITHOUT CPP
+## 🏛️ The AI Execution Stack
 
-Empirical measurements benchmarked live on the repository workspace:
+```
+             HUMAN                          AI SYSTEM
+        ┌─────────────┐                 ┌──────────────┐
+        │    Sees     │                 │     CPP      │  Perceives
+        ├─────────────┤                 │ (Perception) │  (Budgeted Graph)
+        │ Understands │                 ├──────────────┤
+        ├─────────────┤  ─────────────▶ │     LLM      │  Reasons
+        │    Acts     │                 │ (Reasoning)  │  (Plan & Strategy)
+        └─────────────┘                 ├──────────────┤
+                                        │     MCP      │  Acts
+                                        │ (Execution)  │  (Tools & Edits)
+                                        └──────────────┘
+```
 
-| Metric | Without CPP (Raw Tool/Shell Dump) | With CPP (Semantic Perception) | Impact / Performance Gain |
-|:-------|:---------------------------------:|:------------------------------:|:-------------------------:|
-| **Context Payload** | 122,044 bytes | **232 bytes** | **99.81% Reduction** |
-| **Estimated LLM Tokens** | 30,511 tokens | **58 tokens** | **~526x Token Savings** |
-| **Context Resolution Latency** | 450 – 1200 ms | **2.10 ms** | **~200x Faster Perception** |
-| **Cost per Query Turn** | ~$0.091 | **~$0.00017** | **99.81% Cost Reduction** |
-| **Change Detection** | Polling loops (`while true`) | **WebSocket Push Notifications** | Zero-latency event streaming |
-| **Context Structure** | Unstructured text | **Typed Relational Graph** | Zero path/symbol hallucinations |
+---
+
+## ❓ Why Existing Approaches Fail
+
+Before CPP, AI tools gathered workspace context using ad-hoc mechanisms that struggle at scale:
+
+1. **Prompt Stuffing:** Reading whole files and terminal outputs fills the context window, triggers "lost in the middle" degradation, and inflates API costs.
+2. **Standard RAG:** Unstructured text similarity retrieves isolated text chunks but misses critical software relationships (`Branch` $\rightarrow$ `Commit` $\rightarrow$ `Issue` $\rightarrow$ `PR` $\rightarrow$ `File`).
+3. **Unstructured Tool Output:** MCP tool execution returns raw text blobs that must be parsed repeatedly by the LLM.
+4. **Passive Polling Loops:** Agents run continuous `while true` polling loops to detect workspace changes, wasting time and compute.
+
+**CPP replaces prompt stuffing and RAG with a source-side, budget-enforced Semantic Context Graph.**
+
+---
+
+## ⚔️ Protocol Feature Matrix
+
+| Feature | Traditional RAG | Model Context Protocol (MCP) | Context Provider Protocol (CPP) |
+|:--------|:---------------:|:---------------------------:|:-------------------------------:|
+| **Executes System Tools** | ❌ | **✅ Primary Role** | ❌ *(Delegated to MCP)* |
+| **Structured Context Perception** | ❌ | Partial *(Resources)* | **✅ Primary Role** |
+| **Source-Side Token Budgeting** | ❌ | ❌ | **✅ Built-in Solver** |
+| **Relational Context Graph** | ❌ | ❌ | **✅ Typed Nodes & Edges** |
+| **Semantic Type Taxonomy** | ❌ | Partial | **✅ 36 Standard MIME Types** |
+| **Real-time Push Notifications** | Partial | Partial | **✅ WebSocket Event Bus** |
+
+---
+
+## 📈 Empirical Repository Benchmark (Methodology & Results)
+
+* **Test Methodology:** Benchmark run on the CPP codebase workspace comparing unbudgeted raw file scanning against CPP's budget-enforced context solver with a 4 KB budget constraint.
+
+```
+-------------------------------------------------------------------------
+| Metric                     | Raw Unbudgeted Dump | CPP Budget Solved  |
+-------------------------------------------------------------------------
+| Context Volume             | 122,044 bytes       | 232 bytes          |
+| Estimated LLM Tokens       | ~30,511 tokens      | ~58 tokens         |
+| Source Volume Reduction    | 0%                  | 99.81% Reduction   |
+| Resolution Time            | 450 – 1200 ms (shell)| 2.10 ms (in-memory) |
+-------------------------------------------------------------------------
+```
+
+> **Note on Methodology:** This benchmark represents a single-turn code context resolution query on a 122 KB codebase. Actual token savings depend on workspace size, goal intent, and requested budget preferences.
 
 ```bash
-# Run the live benchmark on any directory:
+# Run the local benchmark against any codebase:
 cargo run --bin benchmark -- "/path/to/workspace"
 ```
 
 ---
 
-## 🏛️ Protocol Architecture: Perceive → Reason → Act
+## 🔗 End-to-End Query Example
 
-CPP operates upstream of the LLM model and MCP execution layer:
+When an AI developer tool resolves a question like *"Where is the authentication bug?"*, CPP resolves a connected multi-provider graph rather than a isolated text blob:
 
 ```
-                         JSON-RPC 2.0 / HTTP + WebSocket
-                         ─────────────────────────────────
- ┌─────────────────┐          ┌────────────────────┐          ┌──────────────────┐
- │   AI Clients    │  ──────▶ │     CPP Server     │ ◀──────  │    Providers     │
- │                 │  query   │                    │  register│                  │
- │  Cursor, Claude │  ◀────── │  Query Router      │  ──────▶ │  Filesystem      │
- │  LangChain      │  bundle  │  Budget Solver     │  resolve │  Git             │
- │  Custom Agents  │          │  Context Graph     │          │  GitHub / Jira   │
- └────────┬────────┘          │  Event Bus         │          │  Slack / Custom  │
-          │                   └────────┬───────────┘          └──────────────────┘
-          │                            │
-          └────── WebSocket ◀──────────┘
-                  (cpp/event push notifications)
+User Query: "Where is the authentication bug?"
+                           │
+                           ▼
+                  CPP Query (goal.code)
+                           │
+       ┌───────────────────┼───────────────────┐
+       ▼                   ▼                   ▼
+ Git Provider       Jira Provider       Slack Provider
+ ├─ Branch: main    ├─ Issue: AUTH-104  ├─ Msg: "auth fix"
+ └─ Commit: f4a291  └─ Status: Blocked  └─ Channel: #dev
+       │                   │                   │
+       └───────────────────┼───────────────────┘
+                           │
+                           ▼
+            Unified Semantic Context Graph
+  [Branch: main] ──(references)──▶ [Issue: AUTH-104]
+  [Issue: AUTH-104] ──(associated_with)──▶ [Slack: #dev]
+  [Commit: f4a291] ──(modifies)──▶ [File: auth_provider.rs]
+                           │
+                           ▼
+   Delivered to LLM (Budget Solved: 58 Semantic Objects)
 ```
 
-| Layer | Protocol | Role & Responsibility |
-|:------|:---------|:----------------------|
-| **Perceive** | **CPP (Context Provider Protocol)** | Delivers structured, budget-bounded context graphs to the model |
-| **Reason** | **LLM (Gemini, Claude, GPT-4)** | Processes context, performs reasoning, formulates execution plans |
-| **Act** | **MCP (Model Context Protocol)** | Executes terminal tools, file edits, and system actions |
+---
+
+## ⚡ Benefits for Context Providers & SaaS Platforms
+
+Why should platforms (GitHub, Jira, Slack, Linear, Notion, Local Filesystems) implement a CPP `ContextProvider`?
+
+1. **Implement Once, Work Everywhere:** One CPP adapter connects your platform to Cursor, Claude Code, GitHub Copilot, OpenAI Codex, and custom AI agents.
+2. **Source-Side Budget Enforcement:** Protect your API rate limits by downsampling and filtering context server-side before payload transmission.
+3. **Relational Context Graph:** Expose rich relational edges (`DependsOn`, `CreatedBy`, `PrecededBy`) rather than flat text.
+4. **Real-time Event Streaming:** Push changes (`cpp/event`) over WebSockets instead of answering high-frequency client polling requests.
+5. **Fine-Grained Capability Control:** Enforce security policies (`MetadataOnly`, `Summarize`, `FullRead`) per token or session.
 
 ---
 
@@ -94,7 +128,7 @@ CPP operates upstream of the LLM model and MCP execution layer:
 
 ### 1. Semantic Context Object (SCO)
 
-Every piece of context is represented as an addressable, typed, permissioned, temporally-aware unit:
+Every piece of context in CPP is represented as a globally addressable, typed, permissioned, temporally-aware unit:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -160,23 +194,6 @@ Queries combine a **goal**, **budget**, **scope**, and **filters**:
 }
 ```
 
-### 4. Context Graph
-
-Query responses return a typed relationship graph connecting objects across providers:
-
-```json
-{
-  "graph": {
-    "nodes": ["ctx_a1b2", "ctx_c3d4", "ctx_e5f6"],
-    "edges": [
-      { "source": "ctx_a1b2", "target": "ctx_c3d4", "edgeType": "contains" },
-      { "source": "ctx_c3d4", "target": "ctx_e5f6", "edgeType": "references" }
-    ],
-    "cycleDetected": false
-  }
-}
-```
-
 ---
 
 ## ⚡ Protocol Method Reference
@@ -207,7 +224,7 @@ Query responses return a typed relationship graph connecting objects across prov
 ```bash
 cargo run --bin cpp-server
 # Server starts on http://localhost:3030
-# Visual Glassmorphic Dashboard available at http://localhost:3030
+# Visual Dashboard available at http://localhost:3030
 ```
 
 ### 2. Query Workspace Context (Python SDK)
@@ -256,7 +273,27 @@ Add CPP bridge to your `claude_desktop_config.json`:
 }
 ```
 
-Exposes three tools to your assistant: `cpp_query`, `cpp_resolve`, and `cpp_capabilities`.
+Exposes three tools: `cpp_query`, `cpp_resolve`, and `cpp_capabilities`.
+
+---
+
+## 🗺️ Project Roadmap
+
+- [x] **v0.1 — Core Specification & Engine**
+  - [x] RFC-0000 Philosophy & RFC-0001 Protocol Specifications
+  - [x] Core Rust Crate Ecosystem (`cpp-core`, `cpp-protocol`, `cpp-runtime`, `cpp-server`)
+  - [x] Local Providers (Filesystem, Git, Datetime)
+  - [x] Python SDK (`cpp_sdk`) & MCP-to-CPP Bridge (`mcp_bridge.py`)
+  - [x] SaaS Providers (GitHub, Jira, Slack)
+- [ ] **v0.2 — Enterprise & Distributed Context**
+  - [ ] stdio Transport Adapter (`cpp-transport-stdio`)
+  - [ ] Multi-tenant Authentication Tokens (`CapabilityToken` verification)
+  - [ ] Vector Index Provider Integration (Qdrant, Pinecone, LanceDB)
+  - [ ] TypeScript / Node.js SDK
+- [ ] **v1.0 — Ecosystem Standardization**
+  - [ ] Finalized Stable RFC
+  - [ ] Official Browser Extension & Agent Plugins
+  - [ ] Multi-Language Provider Test Suite
 
 ---
 
@@ -275,7 +312,7 @@ context-provider-protocol/
 │   ├── cpp-runtime/                   #   ContextResolver & ContextCache
 │   ├── cpp-server/                    #   Axum HTTP/WebSocket daemon + Dashboard
 │   ├── cpp-transport-http/            #   HTTP transport framing
-│   └── cpp-transport-stdio/           #   Stdio transport adapter
+│   └── cpp-transport-stdio/           #   stdio transport adapter
 │
 ├── providers/                         # Context Providers
 │   ├── filesystem/                    #   Files & directories (Rust)
