@@ -76,11 +76,9 @@ Before CPP, AI tools gathered workspace context using ad-hoc mechanisms that str
 3. **Unstructured Tool Output:** MCP tool execution returns raw text blobs that must be parsed repeatedly by the LLM.
 4. **Passive Polling Loops:** Agents run continuous `while true` polling loops to detect workspace changes, wasting time and compute.
 
-> **Why not just use RAG?**
+> **How does CPP differ from RAG?**
 >
-> *RAG answers: "What text looks similar?"*
->
-> *CPP answers: "What context is actually relevant, fresh, and budget-permissible?"*
+> *CPP addresses a different layer than traditional text retrieval. It standardizes structured context exchange, budget negotiation, and graph relations across tools, whereas RAG techniques focus primarily on retrieving text snippets by similarity.*
 
 ---
 
@@ -248,8 +246,15 @@ To maintain standard neutrality, CPP clearly separates specification from implem
 │  • Rust Core Engine (cpp-core, cpp-protocol, cpp-runtime, cpp-server)  │
 │  • Python Async SDK (cpp_sdk) & MCP-to-CPP Bridge (mcp_bridge.py)      │
 │  • Built-in Providers (Filesystem, Git, Datetime, GitHub, Jira, Slack) │
-└────────────────────────────────────────────────────────────────────────┘
-```
+└────────────────────────────────────────────┬───────────────────────────┘
+                                             │
+### Interoperability & Conformance Guarantees
+
+For any independent CPP server or client implementation to achieve protocol compliance:
+
+- **Mandatory Wire & Schemas:** Must serialize the exact `ContextObject` (SCO) JSON fields, 3-level MIME taxonomy (`application/cpp.<class>.<type>`), and JSON-RPC 2.0 error codes (`-32000` to `-32009`).
+- **Mandatory Budget Enforcement:** Servers must strictly enforce `maxBytes` and `maxObjects` upper bounds before transmitting context bundles to clients.
+- **Implementation Freedom:** Internal indexing algorithms, vector embeddings, provider search strategies, and storage backends are left to server implementation freedom.
 
 ---
 
