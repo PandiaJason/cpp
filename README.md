@@ -11,7 +11,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB.svg?logo=python&logoColor=white)](https://python.org/)
 [![Tests](https://img.shields.io/badge/Tests-69%20passing-22C55E.svg)]()
 
-CPP provides AI assistants, autonomous coding agents, and IDEs (Cursor, Claude Code, GitHub Copilot, OpenAI Codex, Gemini CLI) with **structured, budget-aware, real-time perception** of their operating environment.
+CPP is an open protocol that **standardizes how AI systems discover, prioritize, and exchange structured context before reasoning**. It provides AI assistants, autonomous coding agents, and IDEs (Cursor, Claude Code, GitHub Copilot, OpenAI Codex, Gemini CLI) with a budget-aware perception layer.
 
 CPP complements the **Model Context Protocol (MCP)**: while MCP standardizes how AI systems **act** (tool execution, file edits, mutations), CPP standardizes how AI systems **perceive** (situated context resolution, token-budget enforcement, and relational graphs).
 
@@ -296,6 +296,8 @@ Why should platforms (GitHub, Jira, Slack, Linear, Notion) build a CPP adapter?
   - [x] Python SDK (`cpp_sdk`) & MCP-to-CPP Bridge (`mcp_bridge.py`)
   - [x] SaaS Providers (GitHub, Jira, Slack)
 - [ ] **v0.2 — Enterprise & Distributed Context**
+  - [ ] RFC-0002 Provider Capability & Relation Mapping Specification
+  - [ ] RFC-0003 Deterministic Budget Solver & Conformance Test Suite
   - [ ] stdio Transport Adapter (`cpp-transport-stdio`)
   - [ ] Multi-tenant Authentication Tokens (`CapabilityToken` verification)
   - [ ] Vector Index Provider Integration (Qdrant, Pinecone, LanceDB)
