@@ -112,6 +112,38 @@ impl JsonRpcError {
             data,
         }
     }
+
+    // CPP-specific error codes (RFC-0001 §11)
+    pub fn provider_unavailable(detail: impl Into<String>) -> Self {
+        Self::new(-32000, detail, None)
+    }
+    pub fn version_mismatch(detail: impl Into<String>) -> Self {
+        Self::new(-32001, detail, None)
+    }
+    pub fn access_denied(detail: impl Into<String>) -> Self {
+        Self::new(-32002, detail, None)
+    }
+    pub fn intent_not_found(detail: impl Into<String>) -> Self {
+        Self::new(-32003, detail, None)
+    }
+    pub fn invalid_constraint(detail: impl Into<String>) -> Self {
+        Self::new(-32004, detail, None)
+    }
+    pub fn object_not_found(detail: impl Into<String>) -> Self {
+        Self::new(-32005, detail, None)
+    }
+    pub fn subscription_limit_exceeded(detail: impl Into<String>) -> Self {
+        Self::new(-32006, detail, None)
+    }
+    pub fn query_timeout(detail: impl Into<String>) -> Self {
+        Self::new(-32007, detail, None)
+    }
+    pub fn provider_error(detail: impl Into<String>) -> Self {
+        Self::new(-32008, detail, None)
+    }
+    pub fn session_expired(detail: impl Into<String>) -> Self {
+        Self::new(-32009, detail, None)
+    }
 }
 
 /// A JSON-RPC 2.0 notification message (no ID).

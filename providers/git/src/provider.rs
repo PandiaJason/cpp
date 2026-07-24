@@ -197,6 +197,7 @@ impl ContextProvider for GitProvider {
             resolution_time_ms: 0,
             from_cache: false,
             metadata: Default::default(),
+            graph: None,
             objects,
         })
     }

@@ -29,6 +29,7 @@ pub mod permission;
 pub mod query;
 pub mod relation;
 pub mod stream;
+pub mod graph;
 pub mod types;
 
 // Re-export primary types for convenience
@@ -39,9 +40,10 @@ pub use context::{
 pub use error::{CppError, ErrorCode};
 pub use manifest::{ProviderCapabilities, ProviderManifest};
 pub use permission::{AccessLevel, CapabilityToken, ContextCapability};
-pub use query::{ContextQuery, ContextQueryBuilder, QueryConstraints, QueryScope};
+pub use query::{ContextQuery, ContextQueryBuilder, QueryConstraints, QueryScope, RankingPolicy};
 pub use relation::{Relation, RelationType};
 pub use stream::{ContextEvent, ContextEventKind, Subscription, SubscriptionFilter};
+pub use graph::{ContextGraph, GraphEdge};
 pub use types::{
     BudgetPreference, Certainty, ContextBudget, ContextClass, ContextId, ContextType, ContextUri,
     Duration, Freshness, FreshnessKind, Goal, Importance, LifecycleState, ProviderId,

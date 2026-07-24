@@ -226,6 +226,7 @@ impl ContextProvider for FilesystemProvider {
             resolution_time_ms: 0,
             from_cache: false,
             metadata: Default::default(),
+            graph: None,
             objects,
         })
     }

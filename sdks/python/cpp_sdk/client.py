@@ -88,6 +88,10 @@ class CppClient:
         return self
 
     async def __aexit__(self, *exc: object) -> None:
+        try:
+            await self.shutdown()
+        except Exception:
+            pass
         await self.close()
 
     async def close(self) -> None:
@@ -214,6 +218,22 @@ class CppClient:
         )
         result = ResolveResult.model_validate(raw)
         return result.object
+
+    # ------------------------------------------------------------------
+    # Publish & Shutdown
+    # ------------------------------------------------------------------
+
+    async def publish(self, event: ContextEvent) -> bool:
+        """Publish a context event to the server."""
+        result = await self._rpc_call("cpp/publish", {
+            "event": event.model_dump(mode="json", by_alias=True, exclude_none=True)
+        })
+        return result.get("accepted", False)
+
+    async def shutdown(self) -> dict:
+        """Gracefully shut down the session."""
+        result = await self._rpc_call("cpp/shutdown", {})
+        return result
 
     # ------------------------------------------------------------------
     # Capabilities

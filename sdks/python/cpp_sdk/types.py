@@ -7,6 +7,7 @@ JSON expected by the CPP wire protocol (JSON-RPC 2.0).
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, NewType
@@ -171,6 +172,35 @@ class ContextType(BaseModel):
     def datetime(cls) -> ContextType:
         return cls(value="application/cpp.datetime")
 
+    @classmethod
+    def directory(cls) -> "ContextType": return cls(value="application/cpp.collection.directory")
+    @classmethod
+    def diff(cls) -> "ContextType": return cls(value="application/cpp.document.diff")
+    @classmethod
+    def comment(cls) -> "ContextType": return cls(value="application/cpp.document.comment")
+    @classmethod
+    def person(cls) -> "ContextType": return cls(value="application/cpp.entity.person")
+    @classmethod
+    def team(cls) -> "ContextType": return cls(value="application/cpp.entity.team")
+    @classmethod
+    def label(cls) -> "ContextType": return cls(value="application/cpp.entity.label")
+    @classmethod
+    def milestone(cls) -> "ContextType": return cls(value="application/cpp.entity.milestone")
+    @classmethod
+    def deployment(cls) -> "ContextType": return cls(value="application/cpp.event.deployment")
+    @classmethod
+    def log(cls) -> "ContextType": return cls(value="application/cpp.document.log")
+    @classmethod
+    def metric(cls) -> "ContextType": return cls(value="application/cpp.document.metric")
+    @classmethod
+    def config(cls) -> "ContextType": return cls(value="application/cpp.document.config")
+    @classmethod
+    def snippet(cls) -> "ContextType": return cls(value="application/cpp.document.snippet")
+    @classmethod
+    def conversation(cls) -> "ContextType": return cls(value="application/cpp.collection.conversation")
+    @classmethod
+    def calendar_event(cls) -> "ContextType": return cls(value="application/cpp.event.event")
+
     def __str__(self) -> str:
         return self.value
 
@@ -329,8 +359,9 @@ class ContextEvent(BaseModel):
 
     model_config = _CAMEL_CONFIG
 
+    id: str = Field(default_factory=lambda: f"evt_{uuid.uuid4().hex[:12]}")
     kind: EventKind
-    uri: str
+    context_uri: str = Field(..., alias="contextUri")
     provider_id: str
     timestamp: datetime
     data: dict[str, Any] = Field(default_factory=dict)

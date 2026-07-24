@@ -37,6 +37,21 @@ use crate::types::{ContextBudget, ContextType, Duration, Goal, ProviderId, Sessi
 //  ContextQuery (CRQ)
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Ranking policy for query results (RFC-0001 §4.3).
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RankingPolicy {
+    Relevance,
+    Recency,
+    Importance,
+    Alphabetical,
+    Custom(String),
+}
+
+impl Default for RankingPolicy {
+    fn default() -> Self { Self::Relevance }
+}
+
 /// A Context Request Query (CRQ).
 ///
 /// This is the primary request type for the `cpp/query` method. An agent
@@ -121,6 +136,42 @@ pub struct ContextQuery {
     /// Provider-specific hints (non-binding optimization suggestions).
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub hints: IndexMap<String, serde_json::Value>,
+
+    /// Free-text search across title, summary, content.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    
+    /// URI glob pattern filter.
+    #[serde(skip_serializing_if = "Option::is_none", rename = "uriPattern")]
+    pub uri_pattern: Option<String>,
+    
+    /// Provider ID filter.
+    #[serde(skip_serializing_if = "Option::is_none", rename = "sourceFilter")]
+    pub source_filter: Option<String>,
+    
+    /// Only include objects created after this timestamp.
+    #[serde(skip_serializing_if = "Option::is_none", rename = "createdAfter")]
+    pub created_after: Option<chrono::DateTime<chrono::Utc>>,
+    
+    /// Only include objects created before this timestamp.
+    #[serde(skip_serializing_if = "Option::is_none", rename = "createdBefore")]
+    pub created_before: Option<chrono::DateTime<chrono::Utc>>,
+    
+    /// Only include objects updated after this timestamp.
+    #[serde(skip_serializing_if = "Option::is_none", rename = "updatedAfter")]
+    pub updated_after: Option<chrono::DateTime<chrono::Utc>>,
+    
+    /// Only include objects updated before this timestamp.
+    #[serde(skip_serializing_if = "Option::is_none", rename = "updatedBefore")]
+    pub updated_before: Option<chrono::DateTime<chrono::Utc>>,
+    
+    /// Ranking policy for results.
+    #[serde(default, rename = "rankingPolicy")]
+    pub ranking_policy: RankingPolicy,
+    
+    /// Pagination cursor from a previous query.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
 }
 
 fn default_max_results() -> u32 {
@@ -259,6 +310,15 @@ pub struct ContextQueryBuilder {
     budget: Option<ContextBudget>,
     session_id: Option<SessionId>,
     hints: IndexMap<String, serde_json::Value>,
+    text: Option<String>,
+    uri_pattern: Option<String>,
+    source_filter: Option<String>,
+    created_after: Option<chrono::DateTime<chrono::Utc>>,
+    created_before: Option<chrono::DateTime<chrono::Utc>>,
+    updated_after: Option<chrono::DateTime<chrono::Utc>>,
+    updated_before: Option<chrono::DateTime<chrono::Utc>>,
+    ranking_policy: RankingPolicy,
+    cursor: Option<String>,
 }
 
 impl ContextQueryBuilder {
@@ -278,6 +338,15 @@ impl ContextQueryBuilder {
             budget: None,
             session_id: None,
             hints: IndexMap::new(),
+            text: None,
+            uri_pattern: None,
+            source_filter: None,
+            created_after: None,
+            created_before: None,
+            updated_after: None,
+            updated_before: None,
+            ranking_policy: RankingPolicy::default(),
+            cursor: None,
         }
     }
 
@@ -377,6 +446,51 @@ impl ContextQueryBuilder {
         self
     }
 
+    pub fn text(mut self, t: impl Into<String>) -> Self {
+        self.text = Some(t.into());
+        self
+    }
+
+    pub fn uri_pattern(mut self, p: impl Into<String>) -> Self {
+        self.uri_pattern = Some(p.into());
+        self
+    }
+
+    pub fn source_filter(mut self, s: impl Into<String>) -> Self {
+        self.source_filter = Some(s.into());
+        self
+    }
+
+    pub fn created_after(mut self, t: chrono::DateTime<chrono::Utc>) -> Self {
+        self.created_after = Some(t);
+        self
+    }
+
+    pub fn created_before(mut self, t: chrono::DateTime<chrono::Utc>) -> Self {
+        self.created_before = Some(t);
+        self
+    }
+
+    pub fn updated_after(mut self, t: chrono::DateTime<chrono::Utc>) -> Self {
+        self.updated_after = Some(t);
+        self
+    }
+
+    pub fn updated_before(mut self, t: chrono::DateTime<chrono::Utc>) -> Self {
+        self.updated_before = Some(t);
+        self
+    }
+
+    pub fn ranking_policy(mut self, p: RankingPolicy) -> Self {
+        self.ranking_policy = p;
+        self
+    }
+
+    pub fn cursor(mut self, c: impl Into<String>) -> Self {
+        self.cursor = Some(c.into());
+        self
+    }
+
     /// Builds the CRQ.
     pub fn build(self) -> ContextQuery {
         ContextQuery {
@@ -393,6 +507,15 @@ impl ContextQueryBuilder {
             budget: self.budget,
             session_id: self.session_id,
             hints: self.hints,
+            text: self.text,
+            uri_pattern: self.uri_pattern,
+            source_filter: self.source_filter,
+            created_after: self.created_after,
+            created_before: self.created_before,
+            updated_after: self.updated_after,
+            updated_before: self.updated_before,
+            ranking_policy: self.ranking_policy,
+            cursor: self.cursor,
         }
     }
 }

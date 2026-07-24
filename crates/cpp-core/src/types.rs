@@ -424,6 +424,22 @@ impl ContextType {
     // References
     pub fn link() -> Self { Self::cpp(ContextClass::Reference, "link") }
     pub fn bookmark() -> Self { Self::cpp(ContextClass::Reference, "bookmark") }
+
+    // Additional standard types (RFC-0001 §3.2)
+    pub fn directory() -> Self { Self::cpp(ContextClass::Collection, "directory") }
+    pub fn diff() -> Self { Self::cpp(ContextClass::Document, "diff") }
+    pub fn issue() -> Self { Self::cpp(ContextClass::Entity, "issue") }
+    pub fn comment() -> Self { Self::cpp(ContextClass::Document, "comment") }
+    pub fn pull_request() -> Self { Self::cpp(ContextClass::Entity, "pull_request") }
+    pub fn label() -> Self { Self::cpp(ContextClass::Entity, "label") }
+    pub fn milestone() -> Self { Self::cpp(ContextClass::Entity, "milestone") }
+    pub fn deployment() -> Self { Self::cpp(ContextClass::Event, "deployment") }
+    pub fn log() -> Self { Self::cpp(ContextClass::Document, "log") }
+    pub fn metric() -> Self { Self::cpp(ContextClass::Document, "metric") }
+    pub fn config() -> Self { Self::cpp(ContextClass::Document, "config") }
+    pub fn snippet() -> Self { Self::cpp(ContextClass::Document, "snippet") }
+    pub fn conversation() -> Self { Self::cpp(ContextClass::Collection, "conversation") }
+    pub fn calendar_event() -> Self { Self::cpp(ContextClass::Event, "event") }
 }
 
 impl fmt::Display for ContextType {

@@ -22,6 +22,7 @@ pub const EVENT: &str = "cpp/event";
 pub const PUBLISH: &str = "cpp/publish";
 pub const SHUTDOWN: &str = "cpp/shutdown";
 pub const EXIT: &str = "cpp/exit";
+pub const PROVIDERS_LIST: &str = "cpp/providers/list";
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  CPP/INITIALIZE
@@ -190,4 +191,46 @@ pub struct PublishParams {
 #[serde(rename_all = "camelCase")]
 pub struct PublishResult {
     pub accepted: bool,
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  CPP/SHUTDOWN
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Parameters for `cpp/shutdown`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShutdownParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// Result of `cpp/shutdown`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShutdownResult {
+    pub session_id: String,
+    pub active_subscriptions: u32,
+    pub cached_objects: u32,
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  CPP/PROVIDERS/LIST
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Parameters for `cpp/providers/list`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProvidersListParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub intent: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub semantic_type: Option<String>,
+}
+
+/// Result of `cpp/providers/list`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProvidersListResult {
+    pub providers: Vec<ProviderManifest>,
 }

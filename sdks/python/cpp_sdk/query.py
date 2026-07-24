@@ -7,8 +7,8 @@ provides a more ergonomic construction API for agent code.
 
 from __future__ import annotations
 
-from datetime import timedelta
-from typing import Any
+from datetime import datetime, timedelta
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 from pydantic.alias_generators import to_camel
@@ -91,6 +91,15 @@ class ContextQuery(BaseModel):
     budget: ContextBudget | None = None
     session_id: str | None = None
     hints: dict[str, Any] = Field(default_factory=dict)
+    text: Optional[str] = None
+    uri_pattern: Optional[str] = Field(None, alias="uriPattern")
+    source_filter: Optional[str] = Field(None, alias="sourceFilter")
+    created_after: Optional[datetime] = Field(None, alias="createdAfter")
+    created_before: Optional[datetime] = Field(None, alias="createdBefore")
+    updated_after: Optional[datetime] = Field(None, alias="updatedAfter")
+    updated_before: Optional[datetime] = Field(None, alias="updatedBefore")
+    ranking_policy: Optional[str] = Field(None, alias="rankingPolicy")
+    cursor: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +137,15 @@ class ContextQueryBuilder:
         self._budget: ContextBudget | None = None
         self._session_id: str | None = None
         self._hints: dict[str, Any] = {}
+        self._text: Optional[str] = None
+        self._uri_pattern: Optional[str] = None
+        self._source_filter: Optional[str] = None
+        self._created_after: Optional[datetime] = None
+        self._created_before: Optional[datetime] = None
+        self._updated_after: Optional[datetime] = None
+        self._updated_before: Optional[datetime] = None
+        self._ranking_policy: Optional[str] = None
+        self._cursor: Optional[str] = None
 
     # Budget
 
@@ -222,6 +240,42 @@ class ContextQueryBuilder:
         self._hints[key] = value
         return self
 
+    def text(self, query_text: str) -> ContextQueryBuilder:
+        self._text = query_text
+        return self
+
+    def uri_pattern(self, pattern: str) -> ContextQueryBuilder:
+        self._uri_pattern = pattern
+        return self
+
+    def source_filter(self, filter_expr: str) -> ContextQueryBuilder:
+        self._source_filter = filter_expr
+        return self
+
+    def created_after(self, dt: datetime) -> ContextQueryBuilder:
+        self._created_after = dt
+        return self
+
+    def created_before(self, dt: datetime) -> ContextQueryBuilder:
+        self._created_before = dt
+        return self
+
+    def updated_after(self, dt: datetime) -> ContextQueryBuilder:
+        self._updated_after = dt
+        return self
+
+    def updated_before(self, dt: datetime) -> ContextQueryBuilder:
+        self._updated_before = dt
+        return self
+
+    def ranking_policy(self, policy: str) -> ContextQueryBuilder:
+        self._ranking_policy = policy
+        return self
+
+    def cursor(self, cursor: str) -> ContextQueryBuilder:
+        self._cursor = cursor
+        return self
+
     # Terminal
 
     def build(self) -> ContextQuery:
@@ -239,4 +293,13 @@ class ContextQueryBuilder:
             budget=self._budget,
             session_id=self._session_id,
             hints=self._hints,
+            text=self._text,
+            uri_pattern=self._uri_pattern,
+            source_filter=self._source_filter,
+            created_after=self._created_after,
+            created_before=self._created_before,
+            updated_after=self._updated_after,
+            updated_before=self._updated_before,
+            ranking_policy=self._ranking_policy,
+            cursor=self._cursor,
         )

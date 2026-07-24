@@ -41,8 +41,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/nicholasgasior/context-provider-protocol"
-Repository = "https://github.com/nicholasgasior/context-provider-protocol"
+Homepage = "https://github.com/PandiaJason/cpp"
+Repository = "https://github.com/PandiaJason/cpp"
 
 [tool.hatch.build.targets.wheel]
 packages = ["cpp_sdk"]

@@ -353,6 +353,9 @@ pub struct ContextBundle {
     /// Additional resolution metadata.
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub metadata: IndexMap<String, serde_json::Value>,
+    /// The context graph constructed during traversal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub graph: Option<crate::graph::ContextGraph>,
 }
 
 impl ContextBundle {
@@ -364,6 +367,7 @@ impl ContextBundle {
             resolution_time_ms: 0,
             from_cache: false,
             metadata: IndexMap::new(),
+            graph: None,
         }
     }
 

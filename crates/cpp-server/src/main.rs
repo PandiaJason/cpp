@@ -123,7 +123,7 @@ async fn handle_rpc(
     Json(payload): Json<JsonRpcRequest>,
 ) -> impl IntoResponse {
     if let Err((status, msg)) = check_auth(&headers) {
-        let err = JsonRpcError::new(-32001, msg, None);
+        let err = JsonRpcError::new(-32002, msg, None);
         return (status, Json(JsonRpcResponse::error(payload.id, err))).into_response();
     }
 
@@ -158,6 +158,16 @@ async fn handle_rpc(
             });
             return Json(JsonRpcResponse::success(payload.id, res)).into_response();
         }
+        "cpp/providers/list" => {
+            let res = serde_json::json!({
+                "providers": [
+                    { "id": "filesystem", "name": "Filesystem Context Provider", "version": "0.1.0", "contextTypes": ["application/cpp.document.file", "application/cpp.collection.folder"], "goals": ["code", "document"] },
+                    { "id": "git", "name": "Git Context Provider", "version": "0.1.0", "contextTypes": ["application/cpp.entity.repository", "application/cpp.event.commit", "application/cpp.entity.branch"], "goals": ["code", "project"] },
+                    { "id": "datetime", "name": "Datetime Context Provider", "version": "0.1.0", "contextTypes": ["application/cpp.event.temporal"], "goals": ["calendar"] }
+                ]
+            });
+            return Json(JsonRpcResponse::success(payload.id, res)).into_response();
+        }
         "cpp/resolve" => {
             let params_val = match payload.params {
                 Some(v) => v,
@@ -167,18 +177,43 @@ async fn handle_rpc(
                 }
             };
             let uri_str = params_val.get("uri").and_then(|u| u.as_str()).unwrap_or("");
-            let res = serde_json::json!({
-                "object": {
-                    "uri": uri_str,
-                    "id": uuid::Uuid::new_v4().to_string(),
-                    "contextType": "application/cpp.document.file",
-                    "providerId": "filesystem",
-                    "title": uri_str,
-                    "certainty": "authoritative",
-                    "freshness": { "kind": "live" },
-                    "importance": { "priority": 0.8 },
-                    "content": format!("Resolved content for {}", uri_str)
+            
+            // Get workspace path from hints or default
+            let workspace_path = params_val.get("hints")
+                .and_then(|h| h.get("workspacePath"))
+                .and_then(|v| v.as_str())
+                .map(|s| std::path::PathBuf::from(s))
+                .unwrap_or_else(|| std::path::PathBuf::from("."));
+            let canonical_path = workspace_path.canonicalize().unwrap_or(workspace_path);
+            
+            let registry = ProviderRegistry::new();
+            registry.register(Arc::new(FilesystemProvider::new(&canonical_path)));
+            registry.register(Arc::new(GitProvider::new(&canonical_path)));
+            registry.register(Arc::new(DatetimeProvider::new()));
+            let cache = ContextCache::new();
+            let resolver = ContextResolver::new(registry, cache);
+            
+            let uri = ContextUri::from_string(uri_str);
+            let depth = params_val.get("depth").and_then(|d| d.as_u64()).unwrap_or(0) as u32;
+            match resolver.resolve_uri(&uri, depth, AccessLevel::Read).await {
+                Ok(obj) => {
+                    let res = serde_json::json!({ "object": obj });
+                    return Json(JsonRpcResponse::success(payload.id, res)).into_response();
                 }
+                Err(e) => {
+                    let err = JsonRpcError::new(-32005, format!("Object not found: {}", e), None);
+                    return Json(JsonRpcResponse::error(payload.id, err)).into_response();
+                }
+            }
+        }
+        "cpp/shutdown" => {
+            let mut clients = state.clients.lock().await;
+            let sub_count: u32 = clients.iter().map(|c| c.subscriptions.len() as u32).sum();
+            clients.clear();
+            let res = serde_json::json!({
+                "sessionId": format!("ses_{}", uuid::Uuid::new_v4().simple()),
+                "activeSubscriptions": sub_count,
+                "cachedObjects": 0
             });
             return Json(JsonRpcResponse::success(payload.id, res)).into_response();
         }

@@ -44,3 +44,15 @@ class CppAuthenticationError(CppError):
 
 class CppProviderError(CppError):
     """Raised inside a provider implementation when query or resolve fails."""
+
+class CppPermissionDeniedError(CppError):
+    """Raised when the session lacks required access level."""
+    pass
+
+class CppNotFoundError(CppError):
+    """Raised when a requested object or provider is not found."""
+    pass
+
+class CppRateLimitError(CppError):
+    """Raised when rate limits are exceeded."""
+    pass

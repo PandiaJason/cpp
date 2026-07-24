@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use chrono::Utc;
 use cpp_core::context::{ContextBundle, ContextObject};
 use cpp_core::error::CppError;
+use cpp_core::graph::ContextGraph;
 use cpp_core::query::ContextQuery;
 use cpp_core::types::{ContextUri, ProviderId};
 
@@ -84,27 +85,69 @@ impl ContextResolver {
             }
         }
 
-        // 3. Filter by include/exclude types
+        // 3. Filter by include/exclude types and CQL filters
         if !query.include.is_empty() {
             all_objects.retain(|obj| query.include.contains(&obj.context_type));
         }
         if !query.exclude.is_empty() {
             all_objects.retain(|obj| !query.exclude.contains(&obj.context_type));
         }
+        if let Some(ref text) = query.text {
+            let t = text.to_lowercase();
+            all_objects.retain(|obj| {
+                obj.title.to_lowercase().contains(&t) ||
+                obj.summary.as_ref().map_or(false, |s| s.to_lowercase().contains(&t)) ||
+                obj.content.as_ref().map_or(false, |c| c.to_lowercase().contains(&t))
+            });
+        }
+        if let Some(ref pattern) = query.uri_pattern {
+            let p = pattern.replace("*", "");
+            all_objects.retain(|obj| obj.uri.as_str().contains(&p));
+        }
+        if let Some(ref source) = query.source_filter {
+            all_objects.retain(|obj| obj.provider_id.as_str() == source);
+        }
+        if let Some(ref after) = query.created_after {
+            all_objects.retain(|obj| &obj.created_at >= after);
+        }
+        if let Some(ref before) = query.created_before {
+            all_objects.retain(|obj| &obj.created_at <= before);
+        }
+        if let Some(ref after) = query.updated_after {
+            all_objects.retain(|obj| obj.updated_at >= *after);
+        }
+        if let Some(ref before) = query.updated_before {
+            all_objects.retain(|obj| obj.updated_at <= *before);
+        }
 
         // 4. Ranking / Ordering
-        // Sort by Certainty, then Importance, then Recency
-        all_objects.sort_by(|a, b| {
-            let cert_cmp = b.certainty.cmp(&a.certainty);
-            if cert_cmp != std::cmp::Ordering::Equal {
-                return cert_cmp;
+        match query.ranking_policy {
+            cpp_core::query::RankingPolicy::Recency => {
+                all_objects.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
             }
-            let imp_cmp = b.importance.partial_cmp(&a.importance).unwrap_or(std::cmp::Ordering::Equal);
-            if imp_cmp != std::cmp::Ordering::Equal {
-                return imp_cmp;
+            cpp_core::query::RankingPolicy::Alphabetical => {
+                all_objects.sort_by(|a, b| a.title.cmp(&b.title));
             }
-            b.updated_at.cmp(&a.updated_at)
-        });
+            cpp_core::query::RankingPolicy::Importance => {
+                all_objects.sort_by(|a, b| {
+                    b.importance.partial_cmp(&a.importance).unwrap_or(std::cmp::Ordering::Equal)
+                });
+            }
+            _ => {
+                // Default: Sort by Certainty, then Importance, then Recency
+                all_objects.sort_by(|a, b| {
+                    let cert_cmp = b.certainty.cmp(&a.certainty);
+                    if cert_cmp != std::cmp::Ordering::Equal {
+                        return cert_cmp;
+                    }
+                    let imp_cmp = b.importance.partial_cmp(&a.importance).unwrap_or(std::cmp::Ordering::Equal);
+                    if imp_cmp != std::cmp::Ordering::Equal {
+                        return imp_cmp;
+                    }
+                    b.updated_at.cmp(&a.updated_at)
+                });
+            }
+        }
 
         // 5. Apply context window negotiation budget limits
         if let Some(ref budget) = query.budget {
@@ -138,12 +181,25 @@ impl ContextResolver {
 
         let duration = Utc::now() - start_time;
 
+        let mut graph = ContextGraph::new();
+        for obj in &all_objects {
+            graph.add_node(obj.id.as_str());
+            for rel in &obj.relations {
+                graph.add_edge(
+                    obj.id.as_str(),
+                    rel.target_uri.as_str(),
+                    rel.relation_type.to_string(),
+                );
+            }
+        }
+
         Ok(ContextBundle {
             total_count: all_objects.len() as u32,
             providers: contributing_providers,
             resolution_time_ms: duration.num_milliseconds() as u64,
             from_cache: false,
             metadata: Default::default(),
+            graph: if graph.is_empty() { None } else { Some(graph) },
             objects: all_objects,
         })
     }
@@ -220,6 +276,7 @@ mod tests {
                 resolution_time_ms: 0,
                 from_cache: false,
                 metadata: Default::default(),
+                graph: None,
             })
         }
         async fn resolve(&self, uri: &ContextUri) -> Result<ContextObject, CppError> {
