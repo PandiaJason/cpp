@@ -1,6 +1,6 @@
 # Context Provider Protocol (CPP)
 
-> **The universal open-standard perception layer for AI systems.**
+> **The open-standard perception layer for AI systems.**
 >
 > *CPP standardizes how AI systems discover, filter, relate, and deliver context before reasoning, complementing MCP’s execution layer.*
 
@@ -22,15 +22,47 @@ CPP complements the **Model Context Protocol (MCP)**: while MCP standardizes how
 ```
              HUMAN                          AI SYSTEM
         ┌─────────────┐                 ┌──────────────┐
-        │    Sees     │                 │     CPP      │  Perceives
-        ├─────────────┤                 │ (Perception) │  (Budgeted Graph)
+        │    Sees     │                 │     CPP      │  Perceives (Context & Graph)
+        ├─────────────┤                 │ (Perception) │  "What should I know?"
         │ Understands │                 ├──────────────┤
-        ├─────────────┤  ─────────────▶ │     LLM      │  Reasons
-        │    Acts     │                 │ (Reasoning)  │  (Plan & Strategy)
+        ├─────────────┤  ─────────────▶ │     LLM      │  Reasons (Plan & Strategy)
+        │    Acts     │                 │ (Reasoning)  │  "What should I plan?"
         └─────────────┘                 ├──────────────┤
-                                        │     MCP      │  Acts
-                                        │ (Execution)  │  (Tools & Edits)
+                                        │     MCP      │  Acts (Tools & Edits)
+                                        │ (Execution)  │  "Do this action."
                                         └──────────────┘
+```
+
+### MCP vs. CPP Responsibilities
+
+| Axis | Model Context Protocol (MCP) | Context Provider Protocol (CPP) |
+|:-----|:-----------------------------|:--------------------------------|
+| **Primary Role** | Executes tool capabilities & mutations | Resolves structured context & graph relations |
+| **Core Paradigm** | Tool invocation & action execution | Context discovery & budget negotiation |
+| **RPC Framing** | RPC for actions (`tools/call`) | RPC for context (`cpp/query`, `cpp/resolve`) |
+| **Domain Prompt** | *"Do this action."* | *"What should I know before doing this?"* |
+
+---
+
+## 🔁 Protocol Sequence & Event Flow
+
+```
+  AI Client                   CPP Server Daemon                Context Providers
+  (Cursor/Claude)             (Axum / Router)                 (Git / Filesystem / Jira)
+     │                               │                                │
+     │ ────── cpp/initialize ──────▶ │                                │
+     │ ◀───── Session & Specs ────── │                                │
+     │                               │                                │
+     │ ────── cpp/query (CRQ) ─────▶ │ ───── Resolve Query (CRQ) ───▶ │
+     │                               │ ◀──── Raw Context Objects ──── │
+     │                               │                                │
+     │                               │ ─── [ Source-Side Solver ] ─── │
+     │                               │     Ranks by Score & Budget    │
+     │ ◀───── ContextBundle (SCOs) ─ │                                │
+     │                               │                                │
+     │ ────── cpp/subscribe ───────▶ │ ────── Register Event WS ────▶ │
+     │ ◀───── cpp/event (Push) ───── │ ◀───── File/Git Event Push ─── │
+     │                               │                                │
 ```
 
 ---
@@ -40,7 +72,7 @@ CPP complements the **Model Context Protocol (MCP)**: while MCP standardizes how
 Before CPP, AI tools gathered workspace context using ad-hoc mechanisms that struggle at scale:
 
 1. **Prompt Stuffing:** Reading whole files and terminal outputs fills the context window, triggers "lost in the middle" degradation, and inflates API costs.
-2. **Standard RAG:** Unstructured text similarity retrieves isolated text chunks but misses critical software relationships (`Branch` $\rightarrow$ `Commit` $\rightarrow$ `Issue` $\rightarrow$ `PR` $\rightarrow$ `File`).
+2. **Traditional Vector RAG:** Vector-based RAG primarily ranks by text similarity and requires custom application logic to preserve complex software relationships (`Branch` $\rightarrow$ `Commit` $\rightarrow$ `Issue` $\rightarrow$ `PR` $\rightarrow$ `File`).
 3. **Unstructured Tool Output:** MCP tool execution returns raw text blobs that must be parsed repeatedly by the LLM.
 4. **Passive Polling Loops:** Agents run continuous `while true` polling loops to detect workspace changes, wasting time and compute.
 
@@ -81,7 +113,18 @@ CPP's primary architectural innovation is **source-side budget enforcement**:
 └─────────────────┘     Max Budget: 4,096 B   └─────────────┘    232 Bytes     └──────────┘
 ```
 
-The budget solver evaluates **Certainty**, **Freshness**, **Importance**, and **Graph Weight** *before* serializing payloads to the LLM.
+### Objective Optimization Function
+
+The budget solver evaluates each candidate object $u$ using a multi-attribute utility score:
+
+$$\text{Score}(u) = w_i \cdot \text{Importance}(u) + w_r \cdot \text{Relevance}(u) + w_c \cdot \text{Certainty}(u) + w_f \cdot \text{Freshness}(u)$$
+
+$$\text{subject to } \sum_{u \in S} \text{bytes}(u) \le \text{maxBytes}, \quad |S| \le \text{maxObjects}, \quad \text{Permissions}(u) \ge \text{AccessLevel}$$
+
+* **Importance ($w_i$):** Domain priority declared by provider (0..100).
+* **Relevance ($w_r$):** Semantic relevance to requested goal intent.
+* **Certainty ($w_c$):** Trust classification (`Authoritative`, `Derived`, `Estimated`).
+* **Freshness ($w_f$):** Temporal currency (`Live`, `Recent`, `Cached`, `Immutable`).
 
 ---
 
@@ -112,13 +155,14 @@ User Query: "Where is the authentication bug?"
 *(Illustrative Graph Trace across GitHub, Jira, and Slack providers)*
 
 ### Real JSON Response Payload (`cpp/query`)
+*(Captured live from running `cpp-server` daemon via cURL)*
 
 ```json
 {
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "totalCount": 3,
+    "totalCount": 2,
     "resolutionTimeMs": 4,
     "providers": ["git", "filesystem"],
     "objects": [
