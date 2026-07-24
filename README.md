@@ -67,6 +67,27 @@ CPP complements the **Model Context Protocol (MCP)**: while MCP standardizes how
 
 ---
 
+## ⚡ Protocol Method Reference
+
+### JSON-RPC 2.0 Methods
+
+| Method | Type | Description |
+|:-------|:-----|:------------|
+| `cpp/initialize` | Request | Session handshake and capability negotiation |
+| `cpp/initialized` | Notification | Client confirms session initialization |
+| `cpp/query` | Request | Query context graph with CQL filters and budget |
+| `cpp/resolve` | Request | Resolve a single SCO by `cpp://` URI |
+| `cpp/capabilities` | Request | List active providers and capabilities |
+| `cpp/providers/list` | Request | Discovery endpoint for registered providers |
+| `cpp/subscribe` | Request | Register WebSocket event filters |
+| `cpp/unsubscribe` | Request | Cancel active WebSocket subscription |
+| `cpp/publish` | Request | Publish an event to the server event bus |
+| `cpp/event` | Notification | Server → Client WebSocket push notification |
+| `cpp/shutdown` | Request | Graceful session teardown with statistics |
+| `cpp/exit` | Notification | Final session termination signal |
+
+---
+
 ## ❓ Why Existing Approaches Fail
 
 Before CPP, AI tools gathered workspace context using ad-hoc mechanisms that struggle at scale:
