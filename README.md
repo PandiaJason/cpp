@@ -61,7 +61,7 @@ Before CPP, AI tools gathered workspace context using ad-hoc mechanisms that str
 | **Source-Side Token Budgeting** | ❌ | ❌ | **✅ Built-in Solver** |
 | **Relational Context Graph** | ❌ | ❌ | **✅ Typed Nodes & Edges** |
 | **Semantic Type Taxonomy** | ❌ | Partial | **✅ 36 Standard MIME Types** |
-| **Real-time Push Notifications** | Partial | Partial | **✅ WebSocket Event Bus** |
+| **Real-time Push Notifications** | ❌ *(CDC/Polling)* | Partial *(Resource Subscriptions)* | **✅ WebSocket Event Bus** |
 
 ---
 
@@ -109,6 +109,7 @@ User Query: "Where is the authentication bug?"
   [Issue: AUTH-104] ──(associated_with)──▶ [Slack: #dev]
   [Commit: f4a291] ──(modifies)──▶ [File: auth_provider.rs]
 ```
+*(Illustrative Graph Trace across GitHub, Jira, and Slack providers)*
 
 ### Real JSON Response Payload (`cpp/query`)
 
