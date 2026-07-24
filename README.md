@@ -292,6 +292,19 @@ Why should platforms (GitHub, Jira, Slack, Linear, Notion) build a CPP adapter?
 
 ---
 
+### 🌐 Extensibility & Vendor Namespaces
+
+To ensure long-term stability without central bottlenecking, CPP uses a 3-level taxonomy with vendor namespaces:
+
+```
+application/<namespace>.<class>.<type>
+```
+
+- **Protocol Reserved (`application/cpp.*`):** Reserved strictly for standardized RFC types (e.g., `application/cpp.document.file`, `application/cpp.entity.commit`).
+- **Vendor Extensions (`application/<vendor>.*`):** Third-party platforms can introduce proprietary types without central protocol approval (e.g., `application/github.pull_request`, `application/notion.database`, `application/gitlab.merge_request`, `application/docker.container`).
+
+---
+
 ## 🗺️ Project Roadmap
 
 - [x] **v0.1 — Core Specification & Engine**
@@ -301,16 +314,19 @@ Why should platforms (GitHub, Jira, Slack, Linear, Notion) build a CPP adapter?
   - [x] Python SDK (`cpp_sdk`) & MCP-to-CPP Bridge (`mcp_bridge.py`)
   - [x] SaaS Providers (GitHub, Jira, Slack)
 - [ ] **v0.2 — Enterprise & Distributed Context**
-  - [ ] RFC-0002 Provider Capability & Relation Mapping Specification
-  - [ ] RFC-0003 Deterministic Budget Solver & Conformance Test Suite
+  - [ ] RFC-0002 Provider Capability & Relation Registry Specification
+  - [ ] RFC-0003 Deterministic Budget Solver & Scoring Normalization
+  - [ ] RFC-0004 Formal SCO Schema & Validation Rules
+  - [ ] RFC-0005 Vendor Namespace & Extension Registry
+  - [ ] RFC-0006 Cross-Implementation Conformance Test Suite
   - [ ] stdio Transport Adapter (`cpp-transport-stdio`)
   - [ ] Multi-tenant Authentication Tokens (`CapabilityToken` verification)
   - [ ] Vector Index Provider Integration (Qdrant, Pinecone, LanceDB)
   - [ ] TypeScript / Node.js SDK
 - [ ] **v1.0 — Ecosystem Standardization**
-  - [ ] Finalized Stable RFC
+  - [ ] Finalized Stable RFC Specifications
   - [ ] Official Browser Extension & Agent Plugins
-  - [ ] Multi-Language Provider Test Suite
+  - [ ] Multi-Language Conformance Test Suite (Go, Rust, Python, TS)
 
 ---
 
