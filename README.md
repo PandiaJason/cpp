@@ -301,7 +301,7 @@ application/<namespace>.<class>.<type>
 ```
 
 - **Protocol Reserved (`application/cpp.*`):** Reserved strictly for standardized RFC types (e.g., `application/cpp.document.file`, `application/cpp.entity.commit`).
-- **Vendor Extensions (`application/<vendor>.*`):** Third-party platforms can introduce proprietary types without central protocol approval (e.g., `application/github.pull_request`, `application/notion.database`, `application/gitlab.merge_request`, `application/docker.container`).
+- **Vendor Extensions (`application/<vendor>.*`):** Third-party platforms can introduce proprietary types following the 3-level hierarchy without central protocol approval (e.g., `application/github.entity.pull_request`, `application/notion.document.database`, `application/gitlab.entity.merge_request`, `application/docker.entity.container`).
 
 ---
 
