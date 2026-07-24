@@ -73,7 +73,7 @@ Before CPP, AI tools gathered workspace context using ad-hoc mechanisms that str
 -------------------------------------------------------------------------
 ```
 
-> **Note on Methodology:** This benchmark represents a single-turn code context resolution query on a 122 KB codebase. Actual token savings depend on workspace size, goal intent, and requested budget preferences.
+> **Methodology Note:** This benchmark demonstrates the efficacy of CPP's source-side budget solver on a single-turn query against a 122 KB workspace. By moving budget enforcement to the context provider layer, CPP prevents token inflation before data reaches the model context window. Actual savings vary based on workspace size, goal intent, and client budget preferences.
 
 ```bash
 # Run the local benchmark against any codebase:
