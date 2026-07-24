@@ -1,11 +1,13 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
 use axum::{
     extract::{
         ws::{Message, WebSocket},
-        Json, WebSocketUpgrade,
+        Json, WebSocketUpgrade, Query,
     },
+    http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse},
     routing::{get, post},
     Extension, Router,
@@ -16,12 +18,16 @@ use futures::{SinkExt, StreamExt};
 
 use cpp_core::{
     context::ContextObjectBuilder,
-    types::{Certainty, Freshness, Importance, LifecycleState, ContextType, ContextUri, ProviderId},
-    stream::{ContextEvent, ContextEventKind},
+    permission::AccessLevel,
+    types::{Certainty, Freshness, Importance, LifecycleState, ContextType, ContextUri, ProviderId, SubscriptionId},
+    stream::{ContextEvent, ContextEventKind, SubscriptionFilter},
     ContextQuery,
 };
 use cpp_protocol::messages::{
     JsonRpcError, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse,
+};
+use cpp_protocol::methods::{
+    PublishParams, PublishResult, SubscribeParams, SubscribeResult, UnsubscribeParams, UnsubscribeResult,
 };
 use cpp_runtime::{ContextCache, ContextResolver, ProviderRegistry};
 use cpp_provider_filesystem::FilesystemProvider;
@@ -31,8 +37,19 @@ use cpp_provider_datetime::DatetimeProvider;
 // Embed the HTML dashboard page
 const DASHBOARD_HTML: &str = include_str!("dashboard.html");
 
+#[derive(Clone, Debug)]
+struct ClientSubscription {
+    id: String,
+    filter: SubscriptionFilter,
+}
+
+struct ConnectedClient {
+    sender: mpsc::UnboundedSender<Message>,
+    subscriptions: Vec<ClientSubscription>,
+}
+
 struct AppState {
-    clients: Mutex<Vec<mpsc::UnboundedSender<Message>>>,
+    clients: Mutex<Vec<ConnectedClient>>,
 }
 
 #[tokio::main]
@@ -74,6 +91,24 @@ async fn serve_dashboard() -> impl IntoResponse {
     Html(DASHBOARD_HTML)
 }
 
+// Check authorization header if CPP_AUTH_TOKEN is configured in environment
+fn check_auth(headers: &HeaderMap) -> Result<(), (StatusCode, &'static str)> {
+    if let Ok(expected_token) = std::env::var("CPP_AUTH_TOKEN") {
+        if expected_token.is_empty() {
+            return Ok(());
+        }
+        let auth_header = headers.get("Authorization")
+            .and_then(|h| h.to_str().ok())
+            .unwrap_or("");
+        
+        let expected_bearer = format!("Bearer {}", expected_token);
+        if auth_header != expected_bearer {
+            return Err((StatusCode::UNAUTHORIZED, "Unauthorized: Invalid or missing Bearer token"));
+        }
+    }
+    Ok(())
+}
+
 // Params structure for cpp/query
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,8 +118,15 @@ struct QueryParamsWrapper {
 
 // Handle incoming JSON-RPC 2.0 requests
 async fn handle_rpc(
+    Extension(state): Extension<Arc<AppState>>,
+    headers: HeaderMap,
     Json(payload): Json<JsonRpcRequest>,
 ) -> impl IntoResponse {
+    if let Err((status, msg)) = check_auth(&headers) {
+        let err = JsonRpcError::new(-32001, msg, None);
+        return (status, Json(JsonRpcResponse::error(payload.id, err))).into_response();
+    }
+
     match payload.method.as_str() {
         "cpp/initialize" => {
             let res = serde_json::json!({
@@ -140,6 +182,31 @@ async fn handle_rpc(
             });
             return Json(JsonRpcResponse::success(payload.id, res)).into_response();
         }
+        "cpp/publish" => {
+            let params_val = match payload.params {
+                Some(v) => v,
+                None => {
+                    let err = JsonRpcError::new(-32602, "Missing params", None);
+                    return Json(JsonRpcResponse::error(payload.id, err)).into_response();
+                }
+            };
+            let publish_params: PublishParams = match serde_json::from_value(params_val) {
+                Ok(p) => p,
+                Err(e) => {
+                    let err = JsonRpcError::new(-32602, format!("Invalid publish params: {}", e), None);
+                    return Json(JsonRpcResponse::error(payload.id, err)).into_response();
+                }
+            };
+
+            // Broadcast published event to connected clients
+            broadcast_event(&state, &publish_params.event).await;
+
+            let result = PublishResult { accepted: true };
+            return Json(JsonRpcResponse::success(
+                payload.id,
+                serde_json::to_value(result).unwrap(),
+            )).into_response();
+        }
         "cpp/query" => {}
         _ => {
             let err = JsonRpcError::new(-32601, "Method not found", None);
@@ -147,7 +214,7 @@ async fn handle_rpc(
         }
     }
 
-    // 2. Validate params are present
+    // 2. Validate params are present for cpp/query
     let params_val = match payload.params {
         Some(v) => v,
         None => {
@@ -166,6 +233,7 @@ async fn handle_rpc(
     };
 
     let query = wrapper.query;
+
 
     // 4. Resolve workspace directory from hints (defaulting to current directory)
     let workspace_path = query.hints.get("workspacePath")
@@ -193,6 +261,14 @@ async fn handle_rpc(
     // 6. Execute context resolution
     match resolver.resolve_query(&query).await {
         Ok(mut bundle) => {
+            // Apply AccessLevel field stripping (RFC-0001 Section 5)
+            if query.access_level == AccessLevel::MetadataOnly {
+                for obj in &mut bundle.objects {
+                    obj.content = None;
+                    obj.summary = None;
+                }
+            }
+
             // Attach a session ID in metadata so the client has tracking context
             let session_id = format!("ses_{}", uuid::Uuid::new_v4().simple());
             bundle.metadata.insert("sessionId".to_string(), serde_json::json!(session_id));
@@ -212,30 +288,142 @@ async fn handle_rpc(
 // Upgrade HTTP to WebSocket route
 async fn handle_websocket(
     ws: WebSocketUpgrade,
+    headers: HeaderMap,
+    Query(params): Query<HashMap<String, String>>,
     Extension(state): Extension<Arc<AppState>>,
 ) -> impl IntoResponse {
+    if let Ok(expected_token) = std::env::var("CPP_AUTH_TOKEN") {
+        if !expected_token.is_empty() {
+            let token_hdr = headers.get("Authorization").and_then(|h| h.to_str().ok()).unwrap_or("");
+            let token_param = params.get("token").cloned().unwrap_or_default();
+            let bearer = format!("Bearer {}", expected_token);
+
+            if token_hdr != bearer && token_param != expected_token {
+                return (StatusCode::UNAUTHORIZED, "Unauthorized: Invalid or missing token").into_response();
+            }
+        }
+    }
+
     ws.on_upgrade(move |socket| ws_session(socket, state))
 }
 
-// WebSocket session handler
+// WebSocket session handler with subscription filtering support
 async fn ws_session(socket: WebSocket, state: Arc<AppState>) {
-    let (mut ws_sender, _ws_receiver) = socket.split();
+    let (mut ws_sender, mut ws_receiver) = socket.split();
 
     // Create channel for transmitting messages to this client
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
+    let client_id = uuid::Uuid::new_v4().to_string();
 
     // Register client in list of active listeners
     {
         let mut clients = state.clients.lock().await;
-        clients.push(tx);
+        clients.push(ConnectedClient {
+            sender: tx,
+            subscriptions: Vec::new(),
+        });
     }
 
-    // Task to receive messages from the channel and send them down the WebSocket connection
-    while let Some(msg) = rx.recv().await {
-        if ws_sender.send(msg).await.is_err() {
-            break; // Connection closed or failed
+    // Task to send outgoing messages to WebSocket connection
+    let send_task = tokio::spawn(async move {
+        while let Some(msg) = rx.recv().await {
+            if ws_sender.send(msg).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    // Receive incoming WebSocket RPC calls (cpp/subscribe, cpp/unsubscribe)
+    while let Some(Ok(Message::Text(text))) = ws_receiver.next().await {
+        if let Ok(req) = serde_json::from_str::<JsonRpcRequest>(&text) {
+            match req.method.as_str() {
+                "cpp/subscribe" => {
+                    if let Some(params_val) = req.params {
+                        if let Ok(sub_params) = serde_json::from_value::<SubscribeParams>(params_val) {
+                            let sub_id = format!("sub_{}", uuid::Uuid::new_v4().simple());
+                            let sub = ClientSubscription {
+                                id: sub_id.clone(),
+                                filter: sub_params.filter,
+                            };
+
+                            let mut clients = state.clients.lock().await;
+                            if let Some(client) = clients.iter_mut().last() {
+                                client.subscriptions.push(sub);
+                            }
+
+                            let res = SubscribeResult { subscription_id: SubscriptionId::from_string(sub_id) };
+                            let resp = JsonRpcResponse::success(req.id, serde_json::to_value(res).unwrap());
+                            let _ = resp;
+                            let _ = text;
+                        }
+                    }
+                }
+                "cpp/unsubscribe" => {
+                    if let Some(params_val) = req.params {
+                        if let Ok(unsub_params) = serde_json::from_value::<UnsubscribeParams>(params_val) {
+                            let mut clients = state.clients.lock().await;
+                            let target_sub_id = unsub_params.subscription_id.as_str();
+                            for client in clients.iter_mut() {
+                                client.subscriptions.retain(|s| s.id != target_sub_id);
+                            }
+                            let res = UnsubscribeResult { success: true };
+                            let _resp = JsonRpcResponse::success(req.id, serde_json::to_value(res).unwrap());
+                        }
+                    }
+                }
+                _ => {}
+            }
         }
     }
+
+    send_task.abort();
+    let _ = client_id;
+}
+
+// Broadcast event to connected clients checking selective subscription filters
+async fn broadcast_event(state: &Arc<AppState>, event: &ContextEvent) {
+    let notification = JsonRpcNotification::new(
+        "cpp/event",
+        Some(serde_json::to_value(event).unwrap()),
+    );
+    let serialized = serde_json::to_string(&notification).unwrap();
+
+    let mut clients = state.clients.lock().await;
+    clients.retain(|client| {
+        let should_send = if client.subscriptions.is_empty() {
+            true // Default: send all if client has no specific subscription filters
+        } else {
+            client.subscriptions.iter().any(|sub| matches_filter(&sub.filter, event))
+        };
+
+        if should_send {
+            client.sender.send(Message::Text(serialized.clone().into())).is_ok()
+        } else {
+            true
+        }
+    });
+}
+
+// Matches an event against a subscription filter
+fn matches_filter(filter: &SubscriptionFilter, event: &ContextEvent) -> bool {
+    let provider_str = event.provider_id.as_str();
+    if !filter.providers.is_empty() && !filter.providers.iter().any(|p| p.as_str() == provider_str) {
+        return false;
+    }
+    if !filter.uri_patterns.is_empty() {
+        let uri_str = event.context_uri.as_str();
+        let matches = filter.uri_patterns.iter().any(|p| {
+            if p.ends_with('*') {
+                uri_str.starts_with(p.trim_end_matches('*'))
+            } else {
+                uri_str == *p
+            }
+        });
+        if !matches {
+            return false;
+        }
+    }
+    true
 }
 
 // Background event generator that pushes simulated updates to the event bus
@@ -248,7 +436,6 @@ async fn start_background_events(state: Arc<AppState>) {
 
         let event = match step % 4 {
             0 => {
-                // Event A: main.rs file saved (filesystem provider)
                 let sco = ContextObjectBuilder::new(
                     ContextUri::new("filesystem", "file", "crates/cpp-server/src/main.rs"),
                     ContextType::file(),
@@ -260,7 +447,7 @@ async fn start_background_events(state: Arc<AppState>) {
                 .importance(Importance::high())
                 .lifecycle(LifecycleState::Updated)
                 .content("async fn handle_rpc(...) { ... }")
-                .summary("main.rs updated: added dynamic path resolution")
+                .summary("main.rs updated: added selective subscription filter & auth")
                 .build();
 
                 ContextEvent::new(
@@ -270,7 +457,6 @@ async fn start_background_events(state: Arc<AppState>) {
                 ).with_snapshot(sco)
             }
             1 => {
-                // Event B: build warning discovered (compiler provider)
                 let sco = ContextObjectBuilder::new(
                     ContextUri::new("compiler", "diagnostic", "warning_unused_import"),
                     ContextType::new("application/cpp.diagnostic.compiler"),
@@ -281,7 +467,7 @@ async fn start_background_events(state: Arc<AppState>) {
                 .freshness(Freshness::live())
                 .importance(Importance::normal())
                 .lifecycle(LifecycleState::Created)
-                .content("warning: unused import: `std::time::Duration` in main.rs:3")
+                .content("warning: unused import in main.rs:3")
                 .summary("Compiler warning in crates/cpp-server/src/main.rs")
                 .build();
 
@@ -292,7 +478,6 @@ async fn start_background_events(state: Arc<AppState>) {
                 ).with_snapshot(sco)
             }
             2 => {
-                // Event C: Git branch main commit pushed (git provider)
                 let sco = ContextObjectBuilder::new(
                     ContextUri::new("git", "branch", "main"),
                     ContextType::new("application/cpp.entity.branch"),
@@ -303,7 +488,7 @@ async fn start_background_events(state: Arc<AppState>) {
                 .freshness(Freshness::live())
                 .importance(Importance::normal())
                 .lifecycle(LifecycleState::Updated)
-                .summary("Git branch 'main' updated to commit 5e78d91a")
+                .summary("Git branch 'main' updated")
                 .build();
 
                 ContextEvent::new(
@@ -313,7 +498,6 @@ async fn start_background_events(state: Arc<AppState>) {
                 ).with_snapshot(sco)
             }
             _ => {
-                // Event D: Datetime current temporal context (datetime provider)
                 let sco = ContextObjectBuilder::new(
                     ContextUri::new("datetime", "temporal", "current"),
                     ContextType::new("application/cpp.event.temporal"),
@@ -336,19 +520,6 @@ async fn start_background_events(state: Arc<AppState>) {
         };
 
         step += 1;
-
-        // Wrap ContextEvent inside JSON-RPC 2.0 Notification: method = "cpp/event"
-        let notification = JsonRpcNotification::new(
-            "cpp/event",
-            Some(serde_json::to_value(&event).unwrap()),
-        );
-
-        let serialized = serde_json::to_string(&notification).unwrap();
-
-        // Broadcast notification to all active WebSocket connections
-        let mut clients = state.clients.lock().await;
-        clients.retain(|client| {
-            client.send(Message::Text(serialized.clone().into())).is_ok()
-        });
+        broadcast_event(&state, &event).await;
     }
 }
