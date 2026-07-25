@@ -1,9 +1,8 @@
 # Context Provider Protocol (CPP)
 
-> **The open-standard perception layer for AI systems.**
+**An open protocol that gives AI coding agents the right context — without wasting tokens.**
 
 [![Protocol](https://img.shields.io/badge/Protocol-v0.1.0-8B5CF6.svg)](spec/RFC-0001-CPP.md)
-[![RFC-0000](https://img.shields.io/badge/RFC-Philosophy-blue.svg)](spec/RFC-0000-Philosophy.md)
 [![License](https://img.shields.io/badge/License-MIT-22C55E.svg)](LICENSE-MIT)
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-F74C00.svg?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB.svg?logo=python&logoColor=white)](https://python.org/)
@@ -11,100 +10,82 @@
 
 ---
 
-## What is CPP?
+## The problem
 
-CPP is an open protocol that defines how AI systems **discover, filter, and deliver structured context before reasoning begins**.
+AI coding agents (Cursor, Claude Code, Copilot, Gemini CLI) need to understand your codebase before they can help you. Today, most agents do this by dumping raw file contents into the prompt — thousands of lines the model has to read, most of which are irrelevant.
 
-Every AI coding agent — whether it's Cursor, Claude Code, GitHub Copilot, or Gemini CLI — needs to understand your codebase before it can help you. Today, most agents do this by dumping raw file contents and terminal output into the prompt. This is expensive, slow, and lossy.
+This causes three real problems:
 
-CPP solves this by providing a **standardized perception layer** that sits between your data sources and the LLM. It resolves context from multiple providers (filesystem, Git, GitHub, Jira, Slack), ranks it by relevance, enforces a token budget, and delivers a clean, structured bundle — all before the model sees a single token.
+- **Wasted tokens.** You pay for the model to process code it doesn't need.
+- **Slower responses.** More input tokens = longer time-to-first-token.
+- **Worse answers.** Important context gets buried in noise ("lost in the middle" effect).
 
-### Where CPP fits
+## The solution
+
+CPP is a lightweight local server that sits between your data sources and the AI model. When an agent needs context, it sends a query to CPP instead of reading files directly. CPP resolves context from multiple sources, ranks it, trims it to a token budget, and returns only what matters.
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                    AI Agent Stack                     │
-├──────────────────────────────────────────────────────┤
-│                                                      │
-│   CPP    →  Perceive    "What do I need to know?"    │
-│   LLM    →  Reason      "What should I do?"          │
-│   MCP    →  Act          "Execute this action."      │
-│                                                      │
-└──────────────────────────────────────────────────────┘
+  Your code, Git history,         CPP Server               AI Model
+  Jira tickets, Slack msgs       (localhost:3030)          (GPT, Claude, Gemini)
+  ─────────────────────────  →   Rank & Filter   →   Clean, budgeted context
+        100+ sources                 2 ms                   ~58 tokens
 ```
 
-CPP complements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). MCP standardizes how AI systems **act** (tool execution, file edits, mutations). CPP standardizes how AI systems **perceive** (context discovery, budget enforcement, relational graphs).
+---
+
+## Try it in 60 seconds
+
+```bash
+# 1. Clone and build
+git clone https://github.com/PandiaJason/cpp.git
+cd cpp
+cargo build --release
+
+# 2. Start the server
+cargo run --bin cpp-server
+# → Server running on http://localhost:3030
+
+# 3. Query your workspace context (in another terminal)
+curl -s http://localhost:3030/api/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "cpp/query",
+    "params": {
+      "goal": "goal.code",
+      "budget": { "maxBytes": 4096, "maxObjects": 10 }
+    }
+  }' | python3 -m json.tool
+```
+
+You'll get back a structured JSON response with the most relevant files, branches, and commits — ranked by importance, trimmed to your budget.
+
+---
+
+## How it fits into the AI stack
+
+CPP works alongside [MCP (Model Context Protocol)](https://modelcontextprotocol.io), not against it. They handle different jobs:
+
+```
+  CPP    →  Perceive    "What do I need to know?"
+  LLM    →  Reason      "What should I do?"
+  MCP    →  Act          "Execute this action."
+```
 
 | | MCP | CPP |
 |:--|:--|:--|
-| **Role** | Execute tools and mutations | Resolve structured context |
-| **Core operation** | `tools/call` | `cpp/query` |
-| **Prompt** | *"Do this action."* | *"What should I know before acting?"* |
+| **Job** | Run tools, edit files, execute commands | Gather and filter context |
+| **Core method** | `tools/call` | `cpp/query` |
+| **Question it answers** | *"Do this."* | *"What should I know first?"* |
+
+MCP already solved tool execution. CPP solves the step before it — giving the model the right information so it makes better decisions about what tools to call.
 
 ---
 
-## Why CPP exists
+## What you get back
 
-Before CPP, AI tools gathered workspace context using ad-hoc mechanisms that break at scale:
-
-1. **Prompt stuffing.** Reading whole files fills the context window, triggers "lost in the middle" degradation, and inflates API costs.
-2. **Flat retrieval.** Vector-based RAG ranks by text similarity alone. It cannot preserve structured relationships like `Branch → Commit → Issue → PR → File`.
-3. **Unstructured tool output.** MCP tool calls return raw text blobs that the LLM must re-parse on every turn.
-4. **Polling loops.** Agents run `while true` loops to detect workspace changes, wasting time and compute.
-
-> **How is CPP different from RAG?**
->
-> RAG retrieves text snippets ranked by embedding similarity. CPP resolves *structured context objects* with typed relationships, metadata (certainty, freshness, importance), and enforced token budgets. They address different layers of the problem.
-
----
-
-## How it works
-
-### Protocol sequence
-
-```
-  AI Client                    CPP Server                    Context Providers
-  (Cursor, Claude, etc.)       (localhost:3030)              (Git, Filesystem, Jira...)
-     │                              │                               │
-     │ ─── cpp/initialize ────────▶ │                               │
-     │ ◀── capabilities & session ─ │                               │
-     │                              │                               │
-     │ ─── cpp/query ─────────────▶ │ ─── resolve from providers ─▶ │
-     │                              │ ◀── raw context objects ───── │
-     │                              │                               │
-     │                              │ ── rank, filter, budget ──    │
-     │ ◀── ContextBundle (SCOs) ─── │                               │
-     │                              │                               │
-     │ ─── cpp/subscribe ─────────▶ │ ─── register event watch ──▶  │
-     │ ◀── cpp/event (push) ─────── │ ◀── file/git change event ── │
-```
-
-### API methods
-
-All communication uses **JSON-RPC 2.0** over HTTP or WebSocket.
-
-| Method | Type | Description |
-|:--|:--|:--|
-| `cpp/initialize` | Request | Session handshake and capability negotiation |
-| `cpp/initialized` | Notification | Client confirms initialization |
-| `cpp/query` | Request | Query the context graph with filters and budget |
-| `cpp/resolve` | Request | Fetch a single object by its `cpp://` URI |
-| `cpp/capabilities` | Request | List server capabilities |
-| `cpp/providers/list` | Request | List registered context providers |
-| `cpp/subscribe` | Request | Subscribe to WebSocket event notifications |
-| `cpp/unsubscribe` | Request | Cancel a subscription |
-| `cpp/publish` | Request | Publish an event to the event bus |
-| `cpp/event` | Notification | Server-to-client push notification |
-| `cpp/shutdown` | Request | Graceful session teardown |
-| `cpp/exit` | Notification | Final termination signal |
-
----
-
-## Core concepts
-
-### Semantic Context Objects (SCOs)
-
-Every piece of context in CPP is a **Semantic Context Object** — a structured, globally addressable unit of knowledge with metadata:
+When you query CPP, you get structured **Semantic Context Objects (SCOs)** — not raw text dumps:
 
 ```json
 {
@@ -118,120 +99,222 @@ Every piece of context in CPP is a **Semantic Context Object** — a structured,
 }
 ```
 
-Each SCO has:
-- A **URI** (`cpp://provider/type/path`) — globally unique, no ambiguity.
-- A **context type** — structured MIME taxonomy (see below).
-- **Certainty** — `authoritative`, `derived`, or `estimated`.
+Every object has:
+- A **URI** — globally unique address (`cpp://provider/type/path`). No ambiguous file paths.
+- **Importance** (0–100) — how relevant this is, set by the provider.
+- **Certainty** — `authoritative` (read from source), `derived`, or `estimated`.
 - **Freshness** — `live`, `recent`, `cached`, or `immutable`.
-- **Importance** — provider-declared priority score (0–100).
+- **Relations** — typed links to other objects (e.g., "this commit modifies this file").
 
-### Context type taxonomy
-
-CPP uses a 3-level MIME hierarchy:
-
-```
-application/<namespace>.<class>.<type>
-```
-
-- **Protocol types** (`application/cpp.*`): Standardized types defined in the RFC. Examples: `application/cpp.document.file`, `application/cpp.entity.commit`, `application/cpp.temporal.timestamp`.
-- **Vendor extensions** (`application/<vendor>.*`): Third-party types that require no central approval. Examples: `application/github.entity.pull_request`, `application/notion.document.database`, `application/docker.entity.container`.
-
-### Context Query Language (CQL)
-
-Clients query context using structured filters:
-
-- **Goal intents**: `goal.code`, `goal.project`, `goal.document`, `goal.calendar`.
-- **Budget constraints**: `maxBytes`, `maxObjects`, `prefer` (quality vs. quantity).
-- **Filters**: by provider, context type, minimum certainty, freshness.
-
-### Source-side budget solver
-
-This is CPP's key architectural idea. Instead of dumping everything to the LLM and hoping it fits, CPP **ranks and trims context at the source** before transmission.
-
-```
-  Without CPP:
-  100 files → 122 KB raw text → LLM prompt (~30,000 tokens)
-
-  With CPP:
-  100 files → Budget solver ranks & filters → 232 bytes → LLM prompt (~58 tokens)
-```
-
-The solver scores each candidate object:
-
-$$\text{Score}(u) = w_i \cdot \text{Importance}(u) + w_r \cdot \text{Relevance}(u) + w_c \cdot \text{Certainty}(u) + w_f \cdot \text{Freshness}(u)$$
-
-subject to:
-
-$$\sum_{u \in S} \text{bytes}(u) \le \text{maxBytes}, \quad |S| \le \text{maxObjects}$$
-
-### Relational context graph
-
-CPP doesn't return a flat list of results. It returns a **graph** of typed relationships between context objects:
+CPP also returns a **context graph** showing how objects relate to each other:
 
 ```
 [Branch: main] ──(references)──▶ [Issue: AUTH-104]
-[Issue: AUTH-104] ──(associated_with)──▶ [Slack: #dev]
 [Commit: f4a291] ──(modifies)──▶ [File: auth.rs]
+[Issue: AUTH-104] ──(associated_with)──▶ [Slack: #dev]
 ```
 
-This lets agents understand *why* files, issues, and messages are connected — not just that they matched a search query.
+This lets the agent understand *connections* — not just matching files.
 
 ---
 
-## Example response
+## How the budget solver works
 
-A real `cpp/query` response from the running server:
+This is the core idea. Instead of sending everything to the model, CPP **filters at the source**.
 
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "totalCount": 2,
-    "resolutionTimeMs": 4,
-    "providers": ["git", "filesystem"],
-    "objects": [
-      {
-        "uri": "cpp://git/branch/main",
-        "id": "sco_9f8a12",
-        "contextType": "application/cpp.entity.branch",
-        "providerId": "git",
-        "certainty": "authoritative",
-        "freshness": { "kind": "live" },
-        "importance": 90,
-        "title": "main",
-        "relations": [
-          { "relationType": "references", "targetUri": "cpp://jira/issue/AUTH-104" }
-        ]
-      },
-      {
-        "uri": "cpp://filesystem/file/src/auth.rs",
-        "id": "sco_3b7c41",
-        "contextType": "application/cpp.document.file",
-        "providerId": "filesystem",
-        "certainty": "authoritative",
-        "freshness": { "kind": "live" },
-        "importance": 85,
-        "title": "auth.rs",
-        "summary": "Authentication token verification module"
-      }
-    ],
-    "graph": {
-      "nodes": ["sco_9f8a12", "sco_3b7c41"],
-      "edges": [
-        { "source": "sco_9f8a12", "target": "sco_3b7c41", "edgeType": "references" }
-      ],
-      "cycleDetected": false
-    }
-  }
+The server scores every candidate context object using provider-declared metadata:
+
+```
+Score = (importance × weight) + (relevance × weight) + (certainty × weight) + (freshness × weight)
+```
+
+Then it picks the top-scoring objects that fit within your byte and object count limits. Everything else is dropped before the model ever sees it.
+
+```
+Without CPP:  100 files  →  122 KB raw text    →  ~30,000 tokens to the model
+With CPP:     100 files  →  solver picks top 8  →  232 bytes / ~58 tokens to the model
+```
+
+> **Note:** The ranking uses heuristic scoring (recency, importance, certainty), not LLM-based semantic understanding. It's fast and cheap, but not as deep as having the model read everything. That's the tradeoff — and for most coding tasks, heuristics are good enough.
+
+---
+
+## Built-in context providers
+
+CPP ships with providers that scan real data sources on every query (nothing is pre-indexed):
+
+| Provider | What it resolves | Language |
+|:--|:--|:--|
+| **Filesystem** | Files and directories in your workspace | Rust |
+| **Git** | Branches, commits, diffs, repo metadata | Rust |
+| **Datetime** | System time and timezone | Rust |
+| **GitHub** | Pull requests, issues, commits | Python |
+| **Jira** | Sprint issues, epics, blockers | Python |
+| **Slack** | Channel messages and threads | Python |
+
+### Writing your own provider
+
+Any service can become a CPP provider. You implement two methods:
+
+```rust
+// Rust
+#[async_trait]
+impl ContextProvider for MyProvider {
+    fn manifest(&self) -> &ProviderManifest { /* describe your capabilities */ }
+    async fn query(&self, q: &ContextQuery) -> Result<ContextBundle> { /* return SCOs */ }
+    async fn resolve(&self, uri: &ContextUri) -> Result<ContextObject> { /* resolve one SCO */ }
 }
 ```
+
+```python
+# Python
+class MyProvider:
+    async def query(self, goal: str, budget: ContextBudget) -> ContextBundle:
+        # Return structured context objects
+        ...
+```
+
+Your provider plugs into the CPP server and is immediately available to every connected AI client.
+
+---
+
+## Python SDK
+
+```python
+from cpp_sdk import CppClient, ContextQuery, Goal, ContextBudget
+
+async with CppClient("http://localhost:3030") as client:
+    # Initialize session
+    await client.initialize()
+
+    # Query context with a 4KB budget
+    bundle = await client.query(ContextQuery(
+        goal=Goal.code(),
+        budget=ContextBudget(max_bytes=4096, max_objects=10)
+    ))
+
+    for obj in bundle.objects:
+        print(f"{obj.uri} — {obj.title} (importance: {obj.importance})")
+
+    # Subscribe to real-time file change events
+    await client.subscribe(filters=["filesystem", "git"])
+```
+
+### MCP bridge
+
+CPP integrates with MCP-compatible tools via `mcp_bridge.py`, exposing three perception tools:
+
+| MCP Tool | What it does |
+|:--|:--|
+| `cpp_query` | Query context with goal intent and budget |
+| `cpp_resolve` | Fetch full details for a single `cpp://` URI |
+| `cpp_capabilities` | List active providers |
+
+---
+
+## For platform teams: why build a CPP adapter?
+
+If you run a developer platform (GitHub, Jira, Slack, Linear, Notion, GitLab), here's why CPP matters to you:
+
+**Today:** Every AI tool that integrates with your API builds its own custom retrieval logic. You get hit with redundant API calls, inconsistent data representations, and no control over how much data leaves your service.
+
+**With CPP:** You build one adapter. It works with every CPP-compliant AI client. The budget solver limits data egress per query. You express rich relationships (`Blocks`, `DependsOn`, `CreatedBy`) instead of dumping flat JSON.
+
+```
+ AI Clients                       CPP Server                       Your Platform
+┌─────────────┐                                                   ┌────────────┐
+│ Cursor      │ ──┐                                         ┌──── │ GitHub     │
+│ Claude Code │ ──┼──▶  CPP Engine (JSON-RPC 2.0 / WS)  ◀──┼──── │ Jira       │
+│ Copilot     │ ──┘                                         └──── │ Slack      │
+└─────────────┘                                                   └────────────┘
+                    Build one adapter. Connect all AI clients.
+```
+
+---
+
+## Protocol details
+
+### API methods (JSON-RPC 2.0)
+
+| Method | Type | Purpose |
+|:--|:--|:--|
+| `cpp/initialize` | Request | Session handshake |
+| `cpp/initialized` | Notification | Client confirms ready |
+| `cpp/query` | Request | Query context with filters and budget |
+| `cpp/resolve` | Request | Fetch one object by `cpp://` URI |
+| `cpp/capabilities` | Request | List server capabilities |
+| `cpp/providers/list` | Request | List registered providers |
+| `cpp/subscribe` | Request | Subscribe to WebSocket events |
+| `cpp/unsubscribe` | Request | Cancel subscription |
+| `cpp/publish` | Request | Publish event to the bus |
+| `cpp/event` | Notification | Server → client push |
+| `cpp/shutdown` | Request | Graceful teardown |
+| `cpp/exit` | Notification | Final termination |
+
+### Context type taxonomy
+
+Three-level MIME hierarchy. Protocol types are standardized; vendor types need no approval:
+
+```
+application/<namespace>.<class>.<type>
+
+# Protocol types (standardized)
+application/cpp.document.file
+application/cpp.entity.commit
+application/cpp.temporal.timestamp
+
+# Vendor extensions (no approval needed)
+application/github.entity.pull_request
+application/notion.document.database
+application/docker.entity.container
+```
+
+### Feature comparison
+
+| Feature | Traditional RAG | MCP | CPP |
+|:--|:--:|:--:|:--:|
+| Execute tools | ❌ | ✅ | ❌ |
+| Structured context | ❌ | Partial | ✅ |
+| Source-side budgeting | ❌ | ❌ | ✅ |
+| Context graph | ❌ | ❌ | ✅ |
+| Type taxonomy | ❌ | Partial | ✅ |
+| Real-time push | ❌ | Partial | ✅ |
+
+---
+
+## Specification vs. implementation
+
+CPP cleanly separates the **protocol** (what any implementation must follow) from the **reference code** (this repo):
+
+**The protocol** defines: SCO schema, query language (CQL), 3-level MIME types, budget model, graph structure, JSON-RPC methods, and error codes. See [RFC-0001](spec/RFC-0001-CPP.md).
+
+**This repository** is one implementation: a Rust server, Python SDK, and six built-in providers. You can build a compliant CPP server in any language.
+
+### Conformance rules
+
+To be CPP-compliant, an implementation:
+
+- **Must** serialize the exact SCO JSON fields and MIME taxonomy.
+- **Must** enforce `maxBytes` and `maxObjects` limits before sending bundles.
+- **Must** use error codes `-32000` to `-32009`.
+- **May** use any internal storage, indexing, or ranking strategy.
+
+---
+
+## Non-goals
+
+CPP intentionally does **not**:
+
+- **Execute actions.** No file writes, no terminal commands. Use MCP.
+- **Manage agents.** No prompt chains, no tool orchestration. Use LangChain or AutoGen.
+- **Store embeddings.** Not a vector database. Context is resolved on the fly.
+- **Lock you to a language.** JSON-RPC 2.0 over HTTP/WebSocket/stdio. Implement in anything.
 
 ---
 
 ## Benchmark
 
-Measured on the CPP codebase workspace, comparing an unbudgeted file scan against CPP's budget solver with a 4 KB budget:
+Measured on this project's workspace (single run, 4 KB budget):
 
 | Metric | Raw file scan | CPP budget-solved |
 |:--|--:|--:|
@@ -240,83 +323,7 @@ Measured on the CPP codebase workspace, comparing an unbudgeted file scan agains
 | Volume reduction | — | 99.81% |
 | Resolution time | 450–1,200 ms (shell) | 2.1 ms (in-memory) |
 
-> **Note:** These numbers are from a single workspace. Actual savings depend on workspace size, query goal, and budget configuration.
-
-```bash
-cargo run --bin benchmark -- "/path/to/workspace"
-```
-
----
-
-## Feature comparison
-
-| Feature | Traditional RAG | MCP | CPP |
-|:--|:--:|:--:|:--:|
-| Executes system tools | ❌ | ✅ Primary role | ❌ |
-| Structured context perception | ❌ | Partial (Resources) | ✅ Primary role |
-| Source-side token budgeting | ❌ | ❌ | ✅ Built-in |
-| Relational context graph | ❌ | ❌ | ✅ Typed edges |
-| Semantic type taxonomy | ❌ | Partial | ✅ 36 standard types |
-| Real-time push notifications | ❌ | Partial (Subscriptions) | ✅ WebSocket event bus |
-
----
-
-## Non-goals
-
-CPP has clear architectural boundaries. It does **not**:
-
-- **Execute actions.** No file writes, terminal commands, or API mutations. That's MCP's job.
-- **Manage agents.** No loops, prompt templates, or tool selection. Use LangChain, AutoGen, or custom agents.
-- **Store embeddings.** CPP is a real-time resolution protocol, not a vector database.
-- **Lock you to a language.** The spec is transport-agnostic (JSON-RPC 2.0 over HTTP, WebSocket, or stdio). This repo's Rust/Python implementation is a reference, not the standard.
-
----
-
-## Specification vs. implementation
-
-CPP separates the **protocol specification** (what any implementation must do) from this **reference implementation** (one way to do it):
-
-**Protocol specification** (defined in RFCs):
-- Semantic Context Object (SCO) schema and lifecycle
-- Context Query Language (CQL) and goal registry
-- 3-level MIME taxonomy (`application/cpp.<class>.<type>`)
-- Context budget model (`maxBytes`, `maxObjects`, `prefer`)
-- Relational context graph (nodes, edges, weights)
-- JSON-RPC 2.0 method schemas and error codes (`-32000` to `-32009`)
-
-**Reference implementation** (this repository):
-- Rust core engine (`cpp-core`, `cpp-protocol`, `cpp-runtime`, `cpp-server`)
-- Python async SDK (`cpp_sdk`) and MCP-to-CPP bridge (`mcp_bridge.py`)
-- Built-in providers: Filesystem, Git, Datetime, GitHub, Jira, Slack
-
-### Conformance requirements
-
-For an independent implementation to be CPP-compliant:
-
-- **Must** serialize the exact SCO JSON fields and 3-level MIME taxonomy.
-- **Must** enforce `maxBytes` and `maxObjects` budget limits before transmitting bundles.
-- **Must** use the standard JSON-RPC 2.0 error codes (`-32000` to `-32009`).
-- **May** freely choose internal indexing, storage, and ranking algorithms.
-
----
-
-## For platform integrators
-
-If you maintain a developer platform (GitHub, Jira, Slack, Linear, Notion), building a CPP provider adapter gives you:
-
-1. **Write once, connect everywhere.** One adapter works with every CPP-compliant AI client.
-2. **Protect your API.** The budget solver limits how much data leaves your service per query.
-3. **Express relationships.** Expose typed edges (`DependsOn`, `CreatedBy`, `Blocks`) instead of flat text.
-4. **Push, don't poll.** Deliver updates over WebSocket instead of handling polling requests.
-
-```
- AI Clients                       CPP Server                       Providers
-┌─────────────┐                                                   ┌────────────┐
-│ Cursor      │ ──┐                                         ┌──── │ GitHub     │
-│ Claude Code │ ──┼──▶  CPP Engine (JSON-RPC 2.0 / WS)  ◀──┼──── │ Jira       │
-│ Copilot     │ ──┘                                         └──── │ Slack      │
-└─────────────┘                                                   └────────────┘
-```
+> These numbers are from one workspace. Actual savings depend on project size, query goal, and budget settings.
 
 ---
 
@@ -324,66 +331,31 @@ If you maintain a developer platform (GitHub, Jira, Slack, Linear, Notion), buil
 
 ```
 context-provider-protocol/
-├── spec/                          # Protocol specifications
-│   ├── RFC-0000-Philosophy.md     #   Design principles
-│   └── RFC-0001-CPP.md            #   Full protocol specification
-│
-├── crates/                        # Rust core engine
-│   ├── cpp-core/                  #   SCO, URI, budget solver, graph, permissions
-│   ├── cpp-protocol/              #   JSON-RPC 2.0 wire format and schemas
-│   ├── cpp-sdk/                   #   ContextProvider trait and CppClient
-│   ├── cpp-runtime/               #   ContextResolver and ContextCache
-│   ├── cpp-server/                #   Axum HTTP/WebSocket server daemon
-│   ├── cpp-transport-http/        #   HTTP transport layer
-│   └── cpp-transport-stdio/       #   stdio transport adapter
-│
-├── providers/                     # Context providers
-│   ├── filesystem/                #   Files and directories (Rust)
-│   ├── git/                       #   Repositories, branches, commits (Rust)
-│   ├── datetime/                  #   System time and temporal context (Rust)
-│   ├── github/                    #   Pull requests, issues, commits (Python)
-│   ├── jira/                      #   Sprint issues, epics, blockers (Python)
-│   └── slack/                     #   Channels and threaded messages (Python)
-│
-├── sdks/python/                   # Python SDK
-│   ├── cpp_sdk/                   #   Pydantic v2 models, async client, MCP bridge
-│   └── tests/                     #   14 serialization round-trip tests
-│
-└── examples/                      # Demos and benchmarks
-    ├── simple-query/              #   CLI context resolution demo
-    ├── benchmark/                 #   Budget solver benchmark
-    └── streaming/                 #   WebSocket event subscription demo
+├── spec/                          # RFC specifications
+│   ├── RFC-0000-Philosophy.md
+│   └── RFC-0001-CPP.md
+├── crates/                        # Rust core
+│   ├── cpp-core/                  #   Types, budget solver, graph
+│   ├── cpp-protocol/              #   JSON-RPC wire format
+│   ├── cpp-sdk/                   #   Provider trait, client
+│   ├── cpp-runtime/               #   Resolver, cache
+│   ├── cpp-server/                #   HTTP/WebSocket server
+│   ├── cpp-transport-http/
+│   └── cpp-transport-stdio/
+├── providers/                     # Data source adapters
+│   ├── filesystem/                #   Rust
+│   ├── git/                       #   Rust
+│   ├── datetime/                  #   Rust
+│   ├── github/                    #   Python
+│   ├── jira/                      #   Python
+│   └── slack/                     #   Python
+├── sdks/python/                   # Python SDK + MCP bridge
+└── examples/                      # Demos + benchmark
 ```
 
 ---
 
-## Getting started
-
-### Run the server
-
-```bash
-cargo build --release
-cargo run --bin cpp-server
-# Server starts on http://localhost:3030
-```
-
-### Query context
-
-```bash
-curl -s http://localhost:3030/api/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "cpp/query",
-    "params": {
-      "goal": "goal.code",
-      "budget": { "maxBytes": 4096, "maxObjects": 10 }
-    }
-  }'
-```
-
-### Run tests
+## Testing
 
 ```bash
 # Rust — 55 tests
@@ -397,35 +369,18 @@ cd sdks/python && uv run python -m pytest tests/ -v
 
 ## Roadmap
 
-- [x] **v0.1 — Core specification and engine**
-  - [x] RFC-0000 Philosophy and RFC-0001 Protocol Specification
-  - [x] Rust crate ecosystem (cpp-core, cpp-protocol, cpp-runtime, cpp-server)
-  - [x] Local providers (Filesystem, Git, Datetime)
-  - [x] Python SDK and MCP-to-CPP bridge
-  - [x] SaaS providers (GitHub, Jira, Slack)
-- [ ] **v0.2 — Enterprise and distributed context**
-  - [ ] RFC-0002: Provider capability and relation registry
-  - [ ] RFC-0003: Deterministic budget solver and scoring normalization
-  - [ ] RFC-0004: Formal SCO schema and validation rules
-  - [ ] RFC-0005: Vendor namespace and extension registry
-  - [ ] RFC-0006: Cross-implementation conformance test suite
-  - [ ] stdio transport adapter
-  - [ ] Multi-tenant authentication tokens
-  - [ ] Vector index provider integration (Qdrant, Pinecone, LanceDB)
-  - [ ] TypeScript / Node.js SDK
-- [ ] **v1.0 — Ecosystem standardization**
-  - [ ] Finalized stable RFC specifications
-  - [ ] Browser extension and agent plugins
-  - [ ] Multi-language conformance test suite (Go, Rust, Python, TypeScript)
+- [x] **v0.1 — Core protocol** — RFC specs, Rust engine, Python SDK, 6 providers
+- [ ] **v0.2 — Enterprise** — stdio transport, multi-tenant auth, vector index providers, TypeScript SDK, conformance test suite
+- [ ] **v1.0 — Ecosystem** — stable RFCs, browser extension, multi-language conformance (Go, Rust, Python, TypeScript)
 
 ---
 
 ## Specifications
 
-| Document | Description |
+| Document | Focus |
 |:--|:--|
-| [RFC-0000 — Philosophy](spec/RFC-0000-Philosophy.md) | Design principles: structured perception, budget negotiation, semantic typing |
-| [RFC-0001 — Protocol Specification](spec/RFC-0001-CPP.md) | Complete spec: wire format, methods, types, transports, error codes |
+| [RFC-0000 — Philosophy](spec/RFC-0000-Philosophy.md) | Design principles and motivation |
+| [RFC-0001 — Protocol Specification](spec/RFC-0001-CPP.md) | Complete wire format, methods, types, error codes |
 
 ---
 
