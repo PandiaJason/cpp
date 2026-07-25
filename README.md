@@ -61,6 +61,41 @@ curl -s http://localhost:3030/api/rpc \
 
 You'll get back a structured JSON response with the most relevant files, branches, and commits — ranked by importance, trimmed to your budget.
 
+### What the output looks like
+
+Here's real output from a single `cpp/query` against this repository — **one request, two providers, ten results**:
+
+```
+Resolution Time: 461 ms
+Total Objects:   10
+Providers Used:  ['filesystem', 'git']
+
+ #   Provider     Type                    Title
+ 1   git          entity.branch           main
+ 2   git          entity.repository       cpp
+ 3   git          event.commit            docs: dev and industry-friendly README...
+ 4   git          event.commit            docs: professional clean README rewrite...
+ 5   git          event.commit            feat: add automatic CPP daemon lifecycle...
+ 6   git          event.commit            config: add project-level AGENTS.md...
+ 7   git          event.commit            docs: restore full 12-method API table...
+ 8   filesystem   document.file           Cargo.toml
+ 9   filesystem   document.file           crates/cpp-server/Cargo.toml
+10   filesystem   document.file           adapter.rs
+```
+
+Every object has the same structured format — whether it came from Git or the filesystem. The budget solver ranked them all together and returned only the top 10 within the 4 KB limit.
+
+**Without CPP, this same context would require four separate commands:**
+
+```bash
+git branch                    # → "main"
+git log --oneline -5          # → 5 commits (raw text, needs parsing)
+find . -name "*.rs"           # → 47 files (flat list, no ranking)
+cat Cargo.toml                # → 89 lines of raw text
+```
+
+Four commands, four round trips, four different output formats. CPP unifies them into one structured response.
+
 ---
 
 ## How it fits into the AI stack
