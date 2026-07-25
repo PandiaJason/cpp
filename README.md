@@ -149,12 +149,19 @@ Every object has:
 - **Freshness** — `live`, `recent`, `cached`, or `immutable`.
 - **Relations** — typed links to other objects (e.g., "this commit modifies this file").
 
-CPP also returns a **context graph** showing how objects relate to each other:
+CPP also returns a **context graph** showing how objects relate to each other. With the built-in filesystem and git providers:
 
 ```
-[Branch: main] ──(references)──▶ [Issue: AUTH-104]
-[Commit: f4a291] ──(modifies)──▶ [File: auth.rs]
-[Issue: AUTH-104] ──(associated_with)──▶ [Slack: #dev]
+[Branch: main] ──(contains)──▶ [Commit: c23da0b]
+[Commit: c23da0b] ──(modifies)──▶ [File: provider.rs]
+[File: provider.rs] ──(source)──▶ [file:///providers/filesystem/src/provider.rs]
+```
+
+With SaaS providers (GitHub, Jira, Slack) connected, the graph extends across services:
+
+```
+[Branch: main] ──(references)──▶ [Issue: AUTH-104]        (illustrative)
+[Issue: AUTH-104] ──(associated_with)──▶ [Slack: #dev]    (illustrative)
 ```
 
 This lets the agent understand *connections* — not just matching files.
@@ -370,6 +377,8 @@ Measured on this project's workspace (single run, 4 KB budget):
 | Estimated LLM tokens | ~30,511 | ~58 |
 | Volume reduction | — | 99.81% |
 | Resolution time | 450–1,200 ms (shell) | 2.1 ms (in-memory) |
+
+> **On resolution time:** The 2.1 ms figure measures the budget solver's in-memory ranking and trimming step alone — after objects are already loaded. A full cold `cpp/query` including filesystem scanning and git commands takes 400–500 ms end-to-end. Both are faster than the equivalent 5+ shell commands (~11 seconds with `find -exec stat`).
 
 > These numbers are from one workspace. Actual savings depend on project size, query goal, and budget settings.
 
