@@ -63,38 +63,46 @@ You'll get back a structured JSON response with the most relevant files, branche
 
 ### What the output looks like
 
-Here's real output from a single `cpp/query` against this repository — **one request, two providers, ten results**:
+Here's real output from a single `cpp/query` against this repository — **one request, two providers, smart-ranked results**:
 
 ```
-Resolution Time: 461 ms
-Total Objects:   10
-Providers Used:  ['filesystem', 'git']
+Resolution: 426 ms | Objects: 13 | Providers: ['filesystem', 'git']
 
- #   Provider     Type                    Title
- 1   git          entity.branch           main
- 2   git          entity.repository       cpp
- 3   git          event.commit            docs: dev and industry-friendly README...
- 4   git          event.commit            docs: professional clean README rewrite...
- 5   git          event.commit            feat: add automatic CPP daemon lifecycle...
- 6   git          event.commit            config: add project-level AGENTS.md...
- 7   git          event.commit            docs: restore full 12-method API table...
- 8   filesystem   document.file           Cargo.toml
- 9   filesystem   document.file           crates/cpp-server/Cargo.toml
-10   filesystem   document.file           adapter.rs
+  #  Provider     Imp  Lines  Title
+  1  filesystem  1.00    354  provider.rs          ← recently edited, large source file
+  2  filesystem  0.85    367  types.py             ← substantial source code
+  3  filesystem  0.85    286  client.py            ← substantial source code
+  4  filesystem  0.85    232  provider.rs          ← core provider implementation
+  5  filesystem  0.85    331  resolver.rs          ← the context resolution engine
+  6  filesystem  0.85    305  query.py             ← query logic
+  7  git         0.80      -  main                 ← current branch
+  8  git         0.80      -  cpp                  ← repository name
+  9  git         0.50      -  feat: smart importance scoring...
+ 10  git         0.50      -  docs: add live multi-source demo...
 ```
 
-Every object has the same structured format — whether it came from Git or the filesystem. The budget solver ranked them all together and returned only the top 10 within the 4 KB limit.
+Source code files rank above config files. Recently edited files rank highest. Files with more logic (more lines) get boosted. The budget solver ranked all objects from both providers together and returned only the best.
 
-**Without CPP, this same context would require four separate commands:**
+### CPP vs. standard shell commands
+
+The same context gathered with standard tools requires five separate commands:
 
 ```bash
-git branch                    # → "main"
-git log --oneline -5          # → 5 commits (raw text, needs parsing)
-find . -name "*.rs"           # → 47 files (flat list, no ranking)
-cat Cargo.toml                # → 89 lines of raw text
+git log --oneline -5                    # commits (raw text)
+git branch --show-current               # branch name
+find . -name "*.rs" -exec stat ...      # recent Rust files
+find . -name "*.py" -exec stat ...      # recent Python files (leaks .venv junk)
+find . -exec wc -l ... | sort -rn      # largest files (returns pip packages as "biggest")
 ```
 
-Four commands, four round trips, four different output formats. CPP unifies them into one structured response.
+| | Standard tools | CPP |
+|:--|:--|:--|
+| **Tool calls** | 5 piped shell commands | 1 JSON request |
+| **Time** | ~11 seconds | 426 ms |
+| **Caught .venv junk?** | ❌ Returned pip packages as "top source files" | ✅ Automatically skipped |
+| **Source code ranked first?** | ❌ Separate outputs, no ranking | ✅ `provider.rs` (1.00) ranked #1 |
+| **Git + files unified?** | ❌ Three separate outputs | ✅ Single ranked list |
+| **Config files polluting results?** | N/A (manually filtered) | ✅ Scored 0.3, never appeared |
 
 ---
 
@@ -157,20 +165,25 @@ This lets the agent understand *connections* — not just matching files.
 
 This is the core idea. Instead of sending everything to the model, CPP **filters at the source**.
 
-The server scores every candidate context object using provider-declared metadata:
+The filesystem provider scans up to 200 candidate files, scores each one using smart heuristics, then keeps only the top-ranked objects that fit within your byte and object count limits:
 
 ```
-Score = (importance × weight) + (relevance × weight) + (certainty × weight) + (freshness × weight)
+Score = TypeBase + RecencyBoost + SizeBoost - DepthPenalty
+
+TypeBase:      .rs/.py/.ts = 0.70    .toml/.yaml = 0.30    .md/.txt = 0.20
+RecencyBoost:  < 1 hour = +0.25     < 1 day = +0.15       < 1 week = +0.05
+SizeBoost:     > 200 lines = +0.10  > 50 lines = +0.05
+DepthPenalty:  > 5 levels deep = -0.05
 ```
 
-Then it picks the top-scoring objects that fit within your byte and object count limits. Everything else is dropped before the model ever sees it.
+Source code always outranks config files. Recently edited files always outrank stale ones. Substantial implementation files outrank trivial stubs.
 
 ```
 Without CPP:  100 files  →  122 KB raw text    →  ~30,000 tokens to the model
 With CPP:     100 files  →  solver picks top 8  →  232 bytes / ~58 tokens to the model
 ```
 
-> **Note:** The ranking uses heuristic scoring (recency, importance, certainty), not LLM-based semantic understanding. It's fast and cheap, but not as deep as having the model read everything. That's the tradeoff — and for most coding tasks, heuristics are good enough.
+> **Note:** The ranking uses heuristic scoring, not LLM-based semantic understanding. It can't tell you which file contains the authentication bug — but it will reliably surface source code over config, recent edits over stale files, and substantial modules over one-line stubs. For most coding tasks, that's the right 80% of the answer.
 
 ---
 
