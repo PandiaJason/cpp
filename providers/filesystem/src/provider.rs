@@ -143,6 +143,48 @@ impl FilesystemProvider {
             _ => "text",
         };
 
+        // ── Smart Importance Scoring ──
+        // 1. Base score by file type: source code > config > data
+        let type_score: f64 = match extension.as_str() {
+            "rs" | "py" | "js" | "ts" | "go" | "java" | "c" | "cpp" | "h" | "hpp" => 0.7,
+            "toml" | "yaml" | "yml" | "json" => 0.3,
+            "md" | "txt" | "rst" => 0.2,
+            _ => 0.1,
+        };
+
+        // 2. Recency boost: files modified in last hour +0.2, last day +0.1
+        let age_secs = (Utc::now() - modified).num_seconds().max(0) as f64;
+        let recency_boost: f64 = if age_secs < 3600.0 {
+            0.25   // modified in last hour
+        } else if age_secs < 86400.0 {
+            0.15   // modified in last day
+        } else if age_secs < 604800.0 {
+            0.05   // modified in last week
+        } else {
+            0.0
+        };
+
+        // 3. Size boost: non-trivial files (>50 lines) get a small bump
+        let line_count = content.as_ref().map(|c| c.lines().count()).unwrap_or(0);
+        let size_boost: f64 = if line_count > 200 {
+            0.1
+        } else if line_count > 50 {
+            0.05
+        } else {
+            0.0
+        };
+
+        // 4. Path depth penalty: deeply nested files slightly less important
+        let depth = relative.components().count();
+        let depth_penalty: f64 = if depth > 5 { 0.05 } else { 0.0 };
+
+        let final_importance = (type_score + recency_boost + size_boost - depth_penalty)
+            .min(1.0)
+            .max(0.0);
+
+        let importance = Importance::new(final_importance)
+            .unwrap_or(Importance::normal());
+
         let mut builder = ContextObjectBuilder::new(
             ContextUri::new("filesystem", "file", &*relative_str),
             ContextType::file(),
@@ -151,7 +193,7 @@ impl FilesystemProvider {
         .title(&file_name)
         .certainty(Certainty::Authoritative)
         .freshness(Freshness::live())
-        .importance(Importance::normal())
+        .importance(importance)
         .lifecycle(LifecycleState::Updated)
         .created_at(modified)
         .updated_at(modified)
@@ -162,7 +204,6 @@ impl FilesystemProvider {
         .metadata("sizeBytes", serde_json::json!(metadata.len()));
 
         if let Some(ref c) = content {
-            let line_count = c.lines().count();
             builder = builder
                 .content(c.clone())
                 .summary(format!("{} ({} lines, {} bytes)", file_name, line_count, metadata.len()))
@@ -215,8 +256,20 @@ impl ContextProvider for FilesystemProvider {
             vec!["md", "txt", "rst", "adoc", "html"]
         };
 
-        self.scan_directory(&self.root, &extensions, &mut objects, max, 0, 3)?;
-        objects.sort_by_key(|b| std::cmp::Reverse(b.updated_at));
+        // Scan broadly: collect up to 200 candidates across depth 6
+        let scan_limit = 200.max(max * 5);
+        self.scan_directory(&self.root, &extensions, &mut objects, scan_limit, 0, 6)?;
+
+        // Sort by importance (smart scoring) descending, then recency as tiebreaker
+        objects.sort_by(|a, b| {
+            let imp_cmp = b.importance.partial_cmp(&a.importance).unwrap_or(std::cmp::Ordering::Equal);
+            if imp_cmp != std::cmp::Ordering::Equal {
+                return imp_cmp;
+            }
+            b.updated_at.cmp(&a.updated_at)
+        });
+
+        // Keep only the top-ranked files
         objects.truncate(max);
 
         let providers = vec![ProviderId::new("filesystem")];
